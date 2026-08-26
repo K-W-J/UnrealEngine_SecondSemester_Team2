@@ -1,2 +1,2 @@
-SecondSemester_Team/Content/Art/Maps/Megapack/** filter=lfs diff=lfs merge=lfs -text
+SecondSemester_Team/Content/Art/Maps/** filter=lfs diff=lfs merge=lfs -text
 SecondSemester_Team/Content/Art/Cars/** filter=lfs diff=lfs merge=lfs -text
