@@ -18,13 +18,16 @@ public class SecondSemester_Team : ModuleRules
 			"StateTreeModule",
 			"GameplayStateTreeModule",
 			"UMG",
-			"Slate"
+			"Slate",
+			"SlateCore",
+			"Niagara"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] { });
 
 		PublicIncludePaths.AddRange(new string[] {
 			"SecondSemester_Team",
+			"SecondSemester_Team/CSH",
 			"SecondSemester_Team/Variant_Horror",
 			"SecondSemester_Team/Variant_Horror/UI",
 			"SecondSemester_Team/Variant_Shooter",
