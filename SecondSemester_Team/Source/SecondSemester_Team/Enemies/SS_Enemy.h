@@ -7,6 +7,7 @@
 class AActor;
 class UNiagaraSystem;
 class USoundBase;
+class UAudioComponent;
 
 UCLASS(Blueprintable)
 class SECONDSEMESTER_TEAM_API ASS_Enemy : public ACharacter
@@ -15,6 +16,24 @@ class SECONDSEMESTER_TEAM_API ASS_Enemy : public ACharacter
 
 public:
 	ASS_Enemy();
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Audio")
+	bool bEnableRandomSound = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Audio")
+	TObjectPtr<USoundBase> RandomSound;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Audio", meta = (ClampMin = "0.1", Units = "s"))
+	float MinRandomSoundInterval = 3.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Audio", meta = (ClampMin = "0.1", Units = "s"))
+	float MaxRandomSoundInterval = 8.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Audio", meta = (ClampMin = "0.0"))
+	float RandomSoundVolume = 1.0f;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SS Enemy Audio")
+	TObjectPtr<UAudioComponent> RandomSoundComponent;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Combat", meta = (ClampMin = "1.0"))
 	float MaxHealth = 100.0f;
@@ -146,6 +165,10 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SS Enemy Movement")
 	bool bHasValidNavigationPath = false;
 
+	/** True when the target is outside the vehicle NavMesh and is pursued directly. */
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "SS Enemy Movement|Navigation")
+	bool bDirectlyFollowingOffNavTarget = false;
+
 	/** Circular navigation footprint that contains the Box even while the car is rotating. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Movement|Navigation", meta = (ClampMin = "1.0"))
 	float NavigationAgentRadius = 120.0f;
@@ -154,8 +177,27 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Movement|Navigation", meta = (ClampMin = "1.0"))
 	float NavigationAgentHeight = 170.0f;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Movement|Navigation Recovery")
+	bool bEnableNavigationRecovery = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Movement|Navigation Recovery", meta = (ClampMin = "1.0"))
+	float RecoverySpeed = 500.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Movement|Navigation Recovery", meta = (ClampMin = "1.0"))
+	float RecoveryAcceptanceRadius = 50.0f;
+
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "SS Enemy Movement|Navigation Recovery")
+	FVector LastValidNavigationPoint = FVector::ZeroVector;
+
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "SS Enemy Movement|Navigation Recovery")
+	bool bHasSavedNavigationPoint = false;
+
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "SS Enemy Movement|Navigation Recovery")
+	bool bReturningToNavigation = false;
+
 protected:
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 public:
 	virtual void Tick(float DeltaTime) override;
@@ -163,6 +205,12 @@ public:
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 
 private:
+	void ScheduleRandomSound();
+	void PlayRandomSound();
+	FTimerHandle RandomSoundTimer;
+	void UpdateNavigationRecovery();
+	void ApplyNavigationRecoveryForce();
+	float NavigationRecoveryCheckTime = 0.0f;
 	UFUNCTION()
 	void HandleCarHit(AActor* SelfActor, AActor* OtherActor, FVector NormalImpulse, const FHitResult& Hit);
 	void ApplyCollisionDamage(FVector HitLocation);

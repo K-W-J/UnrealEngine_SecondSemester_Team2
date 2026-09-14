@@ -11,10 +11,16 @@
 #include "NiagaraFunctionLibrary.h"
 #include "NiagaraSystem.h"
 #include "Sound/SoundBase.h"
+#include "Components/AudioComponent.h"
+#include "TimerManager.h"
 
 ASS_Enemy::ASS_Enemy()
 {
 	PrimaryActorTick.bCanEverTick = true;
+	RandomSoundComponent = CreateDefaultSubobject<UAudioComponent>(TEXT("RandomSoundComponent"));
+	RandomSoundComponent->SetupAttachment(GetRootComponent());
+	RandomSoundComponent->bAutoActivate = false;
+	RandomSoundComponent->bStopWhenOwnerDestroyed = true;
 
 	UCharacterMovementComponent* Movement = GetCharacterMovement();
 	Movement->SetUpdateNavAgentWithOwnersCollisions(false);
@@ -34,6 +40,7 @@ void ASS_Enemy::BeginPlay()
 	Super::BeginPlay();
 	CurrentHealth = FMath::Max(MaxHealth, 1.0f);
 	bIsDead = false;
+	ScheduleRandomSound();
 	OnActorHit.AddUniqueDynamic(this, &ASS_Enemy::HandleCarHit);
 	GetCapsuleComponent()->SetNotifyRigidBodyCollision(true);
 
@@ -114,11 +121,60 @@ void ASS_Enemy::BeginPlay()
 	RebuildNavigationPath();
 }
 
+void ASS_Enemy::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	GetWorldTimerManager().ClearTimer(RandomSoundTimer);
+	RandomSoundComponent->Stop();
+	Super::EndPlay(EndPlayReason);
+}
+
+void ASS_Enemy::ScheduleRandomSound()
+{
+	if (bIsDead || IsActorBeingDestroyed())
+	{
+		return;
+	}
+	const float MinInterval = FMath::Max(0.1f, FMath::Min(MinRandomSoundInterval, MaxRandomSoundInterval));
+	const float MaxInterval = FMath::Max(MinInterval, FMath::Max(MinRandomSoundInterval, MaxRandomSoundInterval));
+	GetWorldTimerManager().SetTimer(RandomSoundTimer, this, &ASS_Enemy::PlayRandomSound,
+		FMath::FRandRange(MinInterval, MaxInterval), false);
+}
+
+void ASS_Enemy::PlayRandomSound()
+{
+	if (bIsDead || IsActorBeingDestroyed())
+	{
+		return;
+	}
+	if (!bEnableRandomSound)
+	{
+		RandomSoundComponent->Stop();
+	}
+	else if (RandomSound && !RandomSoundComponent->IsPlaying())
+	{
+		RandomSoundComponent->SetSound(RandomSound);
+		RandomSoundComponent->SetVolumeMultiplier(FMath::Max(0.0f, RandomSoundVolume));
+		RandomSoundComponent->Play();
+	}
+	ScheduleRandomSound();
+}
+
 void ASS_Enemy::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 	if (bIsDead)
 	{
+		return;
+	}
+	NavigationRecoveryCheckTime -= DeltaTime;
+	if (NavigationRecoveryCheckTime <= 0.0f)
+	{
+		NavigationRecoveryCheckTime = 0.1f;
+		UpdateNavigationRecovery();
+	}
+	if (bEnableNavigationRecovery && bReturningToNavigation)
+	{
+		ApplyNavigationRecoveryForce();
 		return;
 	}
 
@@ -138,6 +194,91 @@ void ASS_Enemy::Tick(float DeltaTime)
 	}
 
 	ApplyPathFollowingForce(DeltaTime);
+}
+
+void ASS_Enemy::UpdateNavigationRecovery()
+{
+	if (!bEnableNavigationRecovery)
+	{
+		if (bReturningToNavigation)
+		{
+			PathRecalculationTimeRemaining = 0.0f;
+		}
+		bReturningToNavigation = false;
+		return;
+	}
+	UNavigationSystemV1* NavSystem = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld());
+	UCharacterMovementComponent* Movement = GetCharacterMovement();
+	if (!NavSystem || !Movement)
+	{
+		return;
+	}
+	const ANavigationData* NavData = NavSystem->GetNavDataForProps(Movement->NavAgentProps);
+	if (!NavData)
+	{
+		return;
+	}
+	const FVector FeetLocation = GetActorLocation() - FVector::UpVector * GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
+	FNavLocation ProjectedPoint;
+	// A narrow XY query avoids treating a nearby road as the surface under the car.
+	const bool bOnNavigation = NavSystem->ProjectPointToNavigation(
+		FeetLocation, ProjectedPoint, FVector(25.0f, 25.0f, 100.0f), NavData)
+		&& FVector::DistSquared2D(FeetLocation, ProjectedPoint.Location) <= FMath::Square(25.0f);
+	if (bReturningToNavigation)
+	{
+		// Keep the saved point fixed during recovery; do not replace it with an edge point.
+		if (bOnNavigation && FVector::DistSquared2D(FeetLocation, LastValidNavigationPoint)
+			<= FMath::Square(RecoveryAcceptanceRadius))
+		{
+			bReturningToNavigation = false;
+			PathRecalculationTimeRemaining = 0.0f;
+			StraightAccelerationAlpha = 0.0f;
+		}
+		return;
+	}
+	if (bOnNavigation)
+	{
+		LastValidNavigationPoint = ProjectedPoint.Location;
+		bHasSavedNavigationPoint = true;
+	}
+	else if (bHasSavedNavigationPoint)
+	{
+		bReturningToNavigation = true;
+		NavigationPoints.Reset();
+		CurrentPathPointIndex = INDEX_NONE;
+		bHasValidNavigationPath = false;
+	}
+}
+
+void ASS_Enemy::ApplyNavigationRecoveryForce()
+{
+	UCapsuleComponent* Capsule = GetCapsuleComponent();
+	UCharacterMovementComponent* Movement = GetCharacterMovement();
+	if (!Capsule || !Movement)
+	{
+		return;
+	}
+	FVector Offset = LastValidNavigationPoint - GetActorLocation();
+	Offset.Z = 0.0f;
+	const bool bPhysics = bUseRigidBodyPhysics && Capsule->IsSimulatingPhysics();
+	FVector Velocity = bPhysics ? Capsule->GetPhysicsLinearVelocity() : Movement->Velocity;
+	Velocity.Z = 0.0f;
+	// Slow near the saved point and counter outward inertia without teleporting.
+	const FVector DesiredVelocity = Offset.GetSafeNormal() * FMath::Min(RecoverySpeed, Offset.Size() * 2.0f);
+	const FVector Acceleration = ((DesiredVelocity - Velocity) * 4.0f).GetClampedToMaxSize(MaxMovementForce);
+	if (bPhysics)
+	{
+		Capsule->AddForce(Acceleration, NAME_None, true);
+	}
+	else
+	{
+		Movement->AddForce(Acceleration * Movement->Mass);
+	}
+	if (bDrawDebugPath)
+	{
+		DrawDebugSphere(GetWorld(), LastValidNavigationPoint, 35.0f, 12, FColor::Orange, false);
+		DrawDebugLine(GetWorld(), GetActorLocation(), LastValidNavigationPoint, FColor::Orange, false);
+	}
 }
 
 void ASS_Enemy::HandleCarHit(AActor* SelfActor, AActor* OtherActor, FVector NormalImpulse, const FHitResult& Hit)
@@ -194,6 +335,8 @@ void ASS_Enemy::ApplyCarDamage(float Damage, FVector HitLocation)
 		return;
 	}
 	SetActorTickEnabled(false);
+	GetWorldTimerManager().ClearTimer(RandomSoundTimer);
+	RandomSoundComponent->Stop();
 	SetActorEnableCollision(false);
 	if (ExplosionEffect)
 	{
@@ -214,6 +357,7 @@ void ASS_Enemy::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 
 void ASS_Enemy::SetFollowTarget(AActor* NewTarget)
 {
+	bDirectlyFollowingOffNavTarget = false;
 	FollowTarget = IsValid(NewTarget) ? NewTarget : UGameplayStatics::GetPlayerPawn(this, 0);
 	PathRecalculationTimeRemaining = 0.0f;
 	NavigationPoints.Reset();
@@ -224,6 +368,7 @@ void ASS_Enemy::SetFollowTarget(AActor* NewTarget)
 
 void ASS_Enemy::RebuildNavigationPath()
 {
+	bDirectlyFollowingOffNavTarget = false;
 	PathRecalculationTimeRemaining = PathRecalculationInterval;
 	NavigationPoints.Reset();
 	CurrentPathPointIndex = INDEX_NONE;
@@ -242,6 +387,26 @@ void ASS_Enemy::RebuildNavigationPath()
 			if (ANavigationData* VehicleNavData = NavSystem->GetNavDataForProps(Movement->NavAgentProps))
 			{
 				PathfindingContext = VehicleNavData;
+				FVector TargetFeet = FollowTarget->GetActorLocation();
+				if (const ACharacter* TargetCharacter = Cast<ACharacter>(FollowTarget))
+				{
+					TargetFeet.Z -= TargetCharacter->GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
+				}
+				else
+				{
+					FVector Origin, Extent;
+					FollowTarget->GetActorBounds(true, Origin, Extent);
+					TargetFeet = Origin - FVector::UpVector * Extent.Z;
+				}
+				FNavLocation ProjectedTarget;
+				const bool bTargetOnNavigation = NavSystem->ProjectPointToNavigation(
+					TargetFeet, ProjectedTarget, FVector(25.0f, 25.0f, 100.0f), VehicleNavData)
+					&& FVector::DistSquared2D(TargetFeet, ProjectedTarget.Location) <= FMath::Square(25.0f);
+				if (!bTargetOnNavigation)
+				{
+					bDirectlyFollowingOffNavTarget = true;
+					return;
+				}
 			}
 		}
 	}
@@ -303,26 +468,28 @@ void ASS_Enemy::ApplyPathFollowingForce(float DeltaTime)
 	const float DynamicAcceptanceRadius = PathPointAcceptanceRadius +
 		FMath::Min(CurrentPlanarVelocity.Size() * PathLookAheadTime, 300.0f);
 
-	while (NavigationPoints.IsValidIndex(CurrentPathPointIndex) &&
+	while (!bDirectlyFollowingOffNavTarget && NavigationPoints.IsValidIndex(CurrentPathPointIndex) &&
 		FVector::DistSquared2D(ActorLocation, NavigationPoints[CurrentPathPointIndex]) <=
 			FMath::Square(DynamicAcceptanceRadius))
 	{
 		++CurrentPathPointIndex;
 	}
 
-	if (!NavigationPoints.IsValidIndex(CurrentPathPointIndex))
+	if (!bDirectlyFollowingOffNavTarget && !NavigationPoints.IsValidIndex(CurrentPathPointIndex))
 	{
 		ApplyStoppingForce();
 		return;
 	}
 
+	const FVector SteeringTarget = bDirectlyFollowingOffNavTarget
+		? FollowTarget->GetActorLocation() : NavigationPoints[CurrentPathPointIndex];
 	if (bDrawDebugPath)
 	{
-		DrawDebugLine(GetWorld(), ActorLocation, NavigationPoints[CurrentPathPointIndex],
+		DrawDebugLine(GetWorld(), ActorLocation, SteeringTarget,
 			FColor::Yellow, false, 0.0f, 0, 5.0f);
 	}
 
-	FVector Direction = NavigationPoints[CurrentPathPointIndex] - ActorLocation;
+	FVector Direction = SteeringTarget - ActorLocation;
 	Direction.Z = 0.0f;
 	if (!Direction.Normalize())
 	{
