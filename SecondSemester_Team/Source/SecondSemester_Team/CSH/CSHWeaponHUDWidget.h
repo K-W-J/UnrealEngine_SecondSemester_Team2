@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
+#include "Styling/SlateBrush.h"
 #include "CSHWeaponHUDWidget.generated.h"
 
 class STextBlock;
@@ -20,4 +21,5 @@ protected:
 private:
     TSharedPtr<STextBlock> WeaponNameText;
     TSharedPtr<STextBlock> WeaponDescriptionText;
+    FSlateBrush WeaponIconBrush;
 };

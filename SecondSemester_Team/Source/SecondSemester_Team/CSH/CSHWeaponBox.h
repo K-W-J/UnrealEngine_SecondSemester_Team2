@@ -5,6 +5,7 @@
 class ACSHWeaponBase;
 class UBoxComponent;
 class UStaticMeshComponent;
+class UMaterialInterface;
 UCLASS(Blueprintable)
 class SECONDSEMESTER_TEAM_API ACSHWeaponBox : public AActor
 {
@@ -15,7 +16,10 @@ protected:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components") UBoxComponent* PickupTrigger;
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components") UStaticMeshComponent* BoxMesh;
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components") UStaticMeshComponent* PreviewWeaponMesh;
-    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Pickup") TSubclassOf<ACSHWeaponBase> WeaponClass;
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components") UStaticMeshComponent* BoxGlowMesh;
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components") UStaticMeshComponent* PreviewWeaponGlowMesh;
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Pickup|Highlight") UMaterialInterface* ThroughWallGlowMaterial;
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Pickup") TSubclassOf<ACSHWeaponBase> WeaponClass;
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Pickup") bool bDestroyAfterPickup = true;
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Pickup", meta=(ClampMin="10", Units="cm")) float PickupRadius = 150.0f;
     virtual void BeginPlay() override;

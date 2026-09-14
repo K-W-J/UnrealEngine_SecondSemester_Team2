@@ -5,6 +5,8 @@
 #include "Components/SceneComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/World.h"
+#include "GameFramework/Character.h"
+#include "GameFramework/DamageType.h"
 #include "Kismet/GameplayStatics.h"
 #include "NiagaraFunctionLibrary.h"
 #include "NiagaraSystem.h"
@@ -18,6 +20,9 @@ ACSHWeaponBase::ACSHWeaponBase()
     WeaponMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("WeaponMesh")); WeaponMesh->SetupAttachment(RecoilRoot);
     WeaponMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
     WeaponMesh->SetOnlyOwnerSee(false);
+    WeaponMesh->FirstPersonPrimitiveType = EFirstPersonPrimitiveType::FirstPerson;
+    WeaponMesh->SetRenderCustomDepth(true);
+    WeaponMesh->SetCustomDepthStencilValue(42);
     WeaponMesh->SetOwnerNoSee(false);
     MuzzlePoint = CreateDefaultSubobject<USceneComponent>(TEXT("MuzzlePoint")); MuzzlePoint->SetupAttachment(RecoilRoot);
 }
@@ -30,6 +35,8 @@ void ACSHWeaponBase::Tick(float DeltaSeconds)
 void ACSHWeaponBase::EquipTo(ASecondSemester_TeamCharacter* NewOwner)
 {
     CharacterOwner = NewOwner; SetOwner(NewOwner); SetInstigator(NewOwner);
+    CurrentAmmo = MagazineCapacity;
+    ReserveAmmo = bInfiniteAmmo ? 0 : MagazineCapacity * 3;
     SetActorHiddenInGame(false);
     WeaponMesh->SetVisibility(true, true);
     WeaponMesh->SetHiddenInGame(false, true);
@@ -38,14 +45,54 @@ void ACSHWeaponBase::EquipTo(ASecondSemester_TeamCharacter* NewOwner)
 }
 void ACSHWeaponBase::StartFiring()
 {
-    if (!IsValid(CharacterOwner) || !BulletClass || bTriggerHeld) return;
+    if (!IsValid(CharacterOwner) || (!BulletClass && !bMeleeWeapon) || bTriggerHeld) return;
+    if (GetWorld()->GetTimeSeconds() < NextAllowedFireTime) return;
     bTriggerHeld = true; FireOnce();
     if (bAutomatic) GetWorldTimerManager().SetTimer(FireTimer, this, &ACSHWeaponBase::FireOnce, FireInterval, true, FireInterval);
 }
 void ACSHWeaponBase::StopFiring() { bTriggerHeld = false; GetWorldTimerManager().ClearTimer(FireTimer); }
+void ACSHWeaponBase::Reload()
+{
+    if (bInfiniteAmmo || CurrentAmmo >= MagazineCapacity || ReserveAmmo <= 0) return;
+    StopFiring();
+    const int32 AmmoToLoad = FMath::Min(MagazineCapacity - CurrentAmmo, ReserveAmmo);
+    CurrentAmmo += AmmoToLoad;
+    ReserveAmmo -= AmmoToLoad;
+}
 void ACSHWeaponBase::FireOnce()
 {
-    if (!bTriggerHeld || !IsValid(CharacterOwner) || !BulletClass) return;
+    if (!bTriggerHeld || !IsValid(CharacterOwner) || (!BulletClass && !bMeleeWeapon)) return;
+    if (!bInfiniteAmmo && CurrentAmmo <= 0) { StopFiring(); return; }
+    if (!bInfiniteAmmo) --CurrentAmmo;
+    NextAllowedFireTime = GetWorld()->GetTimeSeconds() + FireInterval;
+    if (bMeleeWeapon)
+    {
+        const FVector Start = CharacterOwner->GetFirstPersonCameraComponent()->GetComponentLocation();
+        const FVector Direction = CharacterOwner->GetFirstPersonCameraComponent()->GetForwardVector();
+        const FVector End = Start + Direction * MeleeRange;
+        FCollisionQueryParams Query(SCENE_QUERY_STAT(CSHMelee), false, CharacterOwner);
+        Query.AddIgnoredActor(this);
+        TArray<FHitResult> Hits;
+        GetWorld()->SweepMultiByChannel(Hits, Start, End, FQuat::Identity, ECC_Pawn, FCollisionShape::MakeSphere(MeleeRadius), Query);
+        TSet<AActor*> DamagedActors;
+        for (const FHitResult& Hit : Hits)
+        {
+            AActor* Target = Hit.GetActor();
+            if (!IsValid(Target) || DamagedActors.Contains(Target)) continue;
+            DamagedActors.Add(Target);
+            UGameplayStatics::ApplyPointDamage(Target, MeleeDamage, Direction, Hit, CharacterOwner->GetController(), this, UDamageType::StaticClass());
+            if (UPrimitiveComponent* HitComponent = Hit.GetComponent())
+            {
+                if (HitComponent->IsSimulatingPhysics()) HitComponent->AddImpulseAtLocation(Direction * MeleeKnockback, Hit.ImpactPoint);
+            }
+            if (ACharacter* HitCharacter = Cast<ACharacter>(Target)) HitCharacter->LaunchCharacter(Direction * MeleeKnockback, true, true);
+        }
+        // Melee weapons lunge forward, then Tick smoothly restores the resting position.
+        RecoilOffset.X = FMath::Min(RecoilOffset.X + WeaponKickDistance, WeaponKickDistance * 1.5f);
+        BP_OnFired();
+        if (!bAutomatic) StopFiring();
+        return;
+    }
     const FVector CamLoc = CharacterOwner->GetFirstPersonCameraComponent()->GetComponentLocation();
     constexpr float AimConvergenceDistance = 5000.0f; // 50 m in Unreal units.
     const FVector CameraEnd = CamLoc + CharacterOwner->GetFirstPersonCameraComponent()->GetForwardVector() * AimConvergenceDistance;

@@ -8,6 +8,7 @@
 #include "Components/SceneComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "Components/MeshComponent.h"
 #include "EnhancedInputComponent.h"
 #include "InputActionValue.h"
 #include "GameFramework/CharacterMovementComponent.h"
@@ -30,6 +31,10 @@ ASecondSemester_TeamCharacter::ASecondSemester_TeamCharacter()
 	FirstPersonMesh->SetupAttachment(GetMesh());
 	FirstPersonMesh->SetOnlyOwnerSee(true);
 	FirstPersonMesh->FirstPersonPrimitiveType = EFirstPersonPrimitiveType::FirstPerson;
+	
+FirstPersonMesh->SetRenderCustomDepth(true);
+	
+FirstPersonMesh->SetCustomDepthStencilValue(42);
 	FirstPersonMesh->SetCollisionProfileName(FName("NoCollision"));
 
 	// Create the Camera Component	
@@ -37,10 +42,10 @@ ASecondSemester_TeamCharacter::ASecondSemester_TeamCharacter()
 	FirstPersonCameraComponent->SetupAttachment(FirstPersonMesh, FName("head"));
 	FirstPersonCameraComponent->SetRelativeLocationAndRotation(FVector(-2.8f, 5.89f, 0.0f), FRotator(0.0f, 90.0f, -90.0f));
 	FirstPersonCameraComponent->bUsePawnControlRotation = true;
-	FirstPersonCameraComponent->bEnableFirstPersonFieldOfView = true;
-	FirstPersonCameraComponent->bEnableFirstPersonScale = true;
+	FirstPersonCameraComponent->bEnableFirstPersonFieldOfView = false;
+	FirstPersonCameraComponent->bEnableFirstPersonScale = false;
 	FirstPersonCameraComponent->FirstPersonFieldOfView = 70.0f;
-	FirstPersonCameraComponent->FirstPersonScale = 0.6f;
+	FirstPersonCameraComponent->FirstPersonScale = 1.0f;
 
 	CSHDeathSpringArm = CreateDefaultSubobject<USpringArmComponent>(TEXT("CSHDeathSpringArm"));
 	CSHDeathSpringArm->SetupAttachment(GetCapsuleComponent());
@@ -53,6 +58,7 @@ ASecondSemester_TeamCharacter::ASecondSemester_TeamCharacter()
 	CSHDeathCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("CSHDeathCamera"));
 	CSHDeathCamera->SetupAttachment(CSHDeathSpringArm, USpringArmComponent::SocketName);
 	CSHDeathCamera->SetActive(false);
+	CSHDeathCamera->bAutoActivate = false;
 
 	// Weapon attachment point exposed on BP_CSH_Player for easy viewport adjustment.
 	WeaponSocket = CreateDefaultSubobject<USceneComponent>(TEXT("WeaponSocket"));
@@ -62,6 +68,10 @@ ASecondSemester_TeamCharacter::ASecondSemester_TeamCharacter()
 	// configure the character comps
 	GetMesh()->SetOwnerNoSee(true);
 	GetMesh()->FirstPersonPrimitiveType = EFirstPersonPrimitiveType::WorldSpaceRepresentation;
+	
+GetMesh()->SetRenderCustomDepth(true);
+	
+GetMesh()->SetCustomDepthStencilValue(42);
 
 	GetCapsuleComponent()->SetCapsuleSize(34.0f, 96.0f);
 
@@ -75,8 +85,47 @@ ASecondSemester_TeamCharacter::ASecondSemester_TeamCharacter()
 void ASecondSemester_TeamCharacter::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+    UpdateBodyVisibility(FirstPersonCameraComponent->IsActive() && !CSHDeathCamera->IsActive());
 	UpdateSprint(DeltaSeconds);
 	UpdateDamageCameraKick(DeltaSeconds);
+	UpdateExplosionCameraShake(DeltaSeconds);
+}
+
+void ASecondSemester_TeamCharacter::BeginPlay()
+{
+    Super::BeginPlay();
+    CSHDeathCamera->Deactivate();
+    FirstPersonCameraComponent->Activate();
+    UpdateBodyVisibility(true);
+}
+
+void ASecondSemester_TeamCharacter::UpdateBodyVisibility(bool bFirstPerson)
+{
+    TArray<UMeshComponent*> BodyMeshes;
+    GetComponents<UMeshComponent>(BodyMeshes);
+    for (UMeshComponent* BodyPart : BodyMeshes)
+    {
+        // Actor-owned body meshes only: never propagate to camera-attached weapons.
+        const bool bHide = BodyPart == FirstPersonMesh || bFirstPerson;
+        if (BodyPart->FirstPersonPrimitiveType != EFirstPersonPrimitiveType::None)
+        {
+            BodyPart->FirstPersonPrimitiveType = EFirstPersonPrimitiveType::None;
+            BodyPart->MarkRenderStateDirty();
+        }
+        BodyPart->SetOnlyOwnerSee(false);
+        BodyPart->SetOwnerNoSee(bHide);
+        BodyPart->SetVisibility(!bHide, false);
+        BodyPart->SetHiddenInGame(bHide, false);
+    }
+}
+
+void ASecondSemester_TeamCharacter::CalcCamera(float DeltaTime, FMinimalViewInfo& OutResult)
+{
+    Super::CalcCamera(DeltaTime, OutResult);
+    // Use the actual chosen POV, after Blueprint tick and camera activation.
+    const bool bAtHead = FVector::DistSquared(OutResult.Location,
+        FirstPersonCameraComponent->GetComponentLocation()) < FMath::Square(50.0f);
+    UpdateBodyVisibility(bAtHead && !CSHDeathCamera->IsActive());
 }
 
 float ASecondSemester_TeamCharacter::TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent, AController* EventInstigator, AActor* DamageCauser)
@@ -168,6 +217,40 @@ void ASecondSemester_TeamCharacter::UpdateDamageCameraKick(float DeltaSeconds)
 	Controller->SetControlRotation((Controller->GetControlRotation() + (DamageCameraKick - PreviousKick)).GetNormalized());
 }
 
+void ASecondSemester_TeamCharacter::ApplyExplosionCameraShake(const FVector& ExplosionLocation, float InnerRadius, float OuterRadius)
+{
+    if (!Controller || bDeathStateEntered || OuterRadius <= 0.0f) return;
+    const float Distance = FVector::Distance(GetActorLocation(), ExplosionLocation);
+    const float SafeInnerRadius = FMath::Min(InnerRadius, OuterRadius);
+    const float Strength = 1.0f - FMath::Clamp((Distance - SafeInnerRadius) / FMath::Max(OuterRadius - SafeInnerRadius, 1.0f), 0.0f, 1.0f);
+    if (Strength <= 0.0f) return;
+
+    ExplosionShakeStrength = FMath::Max(ExplosionShakeStrength, Strength);
+    ExplosionShakeDuration = 0.55f;
+    ExplosionShakeRemaining = ExplosionShakeDuration;
+    ExplosionShakePhase = FMath::FRandRange(0.0f, 2.0f * PI);
+}
+
+void ASecondSemester_TeamCharacter::UpdateExplosionCameraShake(float DeltaSeconds)
+{
+    if (!Controller || (ExplosionShakeRemaining <= 0.0f && PreviousExplosionShake.IsNearlyZero())) return;
+
+    ExplosionShakeRemaining = FMath::Max(0.0f, ExplosionShakeRemaining - DeltaSeconds);
+    const float Time = ExplosionShakeDuration - ExplosionShakeRemaining;
+    const float Envelope = ExplosionShakeDuration > 0.0f ? ExplosionShakeRemaining / ExplosionShakeDuration : 0.0f;
+    FRotator NewShake = FRotator::ZeroRotator;
+    if (ExplosionShakeRemaining > 0.0f)
+    {
+        const float Amplitude = ExplosionShakeStrength * Envelope;
+        NewShake.Pitch = FMath::Sin(Time * 55.0f + ExplosionShakePhase) * 2.2f * Amplitude;
+        NewShake.Yaw = FMath::Sin(Time * 47.0f + ExplosionShakePhase * 1.7f) * 1.8f * Amplitude;
+        NewShake.Roll = FMath::Sin(Time * 63.0f + ExplosionShakePhase * 0.7f) * 2.5f * Amplitude;
+    }
+    Controller->SetControlRotation((Controller->GetControlRotation() + NewShake - PreviousExplosionShake).GetNormalized());
+    PreviousExplosionShake = NewShake;
+    if (ExplosionShakeRemaining <= 0.0f) ExplosionShakeStrength = 0.0f;
+}
+
 void ASecondSemester_TeamCharacter::StartSprint()
 {
 	bSprintRequested = true;
@@ -213,6 +296,7 @@ void ASecondSemester_TeamCharacter::SetupPlayerInputComponent(UInputComponent* P
 {	
 	PlayerInputComponent->BindKey(EKeys::LeftMouseButton, IE_Pressed, this, &ASecondSemester_TeamCharacter::StartWeaponFire);
 	PlayerInputComponent->BindKey(EKeys::LeftMouseButton, IE_Released, this, &ASecondSemester_TeamCharacter::StopWeaponFire);
+	PlayerInputComponent->BindKey(EKeys::R, IE_Pressed, this, &ASecondSemester_TeamCharacter::ReloadWeapon);
 	PlayerInputComponent->BindKey(EKeys::LeftShift, IE_Pressed, this, &ASecondSemester_TeamCharacter::StartSprint);
 	PlayerInputComponent->BindKey(EKeys::LeftShift, IE_Released, this, &ASecondSemester_TeamCharacter::StopSprint);
 	PlayerInputComponent->BindKey(EKeys::Hyphen, IE_Pressed, this, &ASecondSemester_TeamCharacter::DebugTakeDamage);
@@ -321,5 +405,10 @@ void ASecondSemester_TeamCharacter::StartWeaponFire()
 void ASecondSemester_TeamCharacter::StopWeaponFire()
 {
     if (IsValid(CurrentWeapon)) CurrentWeapon->StopFiring();
+}
+
+void ASecondSemester_TeamCharacter::ReloadWeapon()
+{
+    if (IsValid(CurrentWeapon)) CurrentWeapon->Reload();
 }
 

@@ -66,6 +66,9 @@ public:
 	ASecondSemester_TeamCharacter();
 
 	virtual void Tick(float DeltaSeconds) override;
+	virtual void BeginPlay() override;
+	virtual void CalcCamera(float DeltaTime, FMinimalViewInfo& OutResult) override;
+	void UpdateBodyVisibility(bool bFirstPerson);
 	virtual float TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, AController* EventInstigator, AActor* DamageCauser) override;
 
 	UFUNCTION(BlueprintCallable, Category="Player|Health")
@@ -73,6 +76,9 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category="Weapon")
 	bool EquipWeapon(TSubclassOf<ACSHWeaponBase> WeaponClass);
+
+    UFUNCTION(BlueprintCallable, Category="Player|Camera")
+    void ApplyExplosionCameraShake(const FVector& ExplosionLocation, float InnerRadius, float OuterRadius);
 
 protected:
 
@@ -105,11 +111,13 @@ protected:
 
 	void StartWeaponFire();
 	void StopWeaponFire();
+	void ReloadWeapon();
 	void StartSprint();
 	void StopSprint();
 	void UpdateSprint(float DeltaSeconds);
 	void ApplyDamageCameraKick(float DamageAmount, const AActor* DamageCauser);
 	void UpdateDamageCameraKick(float DeltaSeconds);
+	void UpdateExplosionCameraShake(float DeltaSeconds);
 	void DebugTakeDamage();
 	void DebugHeal();
 	void EnterDeathState();
@@ -173,6 +181,16 @@ private:
 	float TimeSinceSprintStopped = 0.0f;
 	FRotator DamageCameraKick = FRotator::ZeroRotator;
 	bool bDeathStateEntered = false;
+	
+float ExplosionShakeRemaining = 0.0f;
+	
+float ExplosionShakeDuration = 0.0f;
+	
+float ExplosionShakeStrength = 0.0f;
+	
+float ExplosionShakePhase = 0.0f;
+	
+FRotator PreviousExplosionShake = FRotator::ZeroRotator;
 };
 
 
