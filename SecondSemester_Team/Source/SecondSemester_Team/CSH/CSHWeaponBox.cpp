@@ -61,12 +61,13 @@ void ACSHWeaponBox::BeginPlay()
         }
     }
     CheckNearbyPlayer();
+    if (bPickupConsumed || IsActorBeingDestroyed()) return;
     GetWorldTimerManager().SetTimer(PickupCheckTimer, this, &ACSHWeaponBox::CheckNearbyPlayer, 0.05f, true);
 }
 
 void ACSHWeaponBox::CheckNearbyPlayer()
 {
-    if (bPickupConsumed || !WeaponClass) return;
+    if (bPickupConsumed) return;
 
     if (ACharacter* Player = UGameplayStatics::GetPlayerCharacter(this, 0))
     {
@@ -85,15 +86,32 @@ void ACSHWeaponBox::NotifyActorBeginOverlap(AActor* OtherActor)
 
 void ACSHWeaponBox::TryPickup(AActor* OtherActor)
 {
-    if (bPickupConsumed || !WeaponClass) return;
+    if (bPickupConsumed) return;
 
     if (ASecondSemester_TeamCharacter* Character = Cast<ASecondSemester_TeamCharacter>(OtherActor))
     {
-        if (Character->EquipWeapon(WeaponClass))
+        if (Character->GetHealth() <= 0.f) return;
+        TSubclassOf<ACSHWeaponBase> SelectedClass = WeaponClass;
+        if (bRandomWeapon)
         {
-            bPickupConsumed = true;
+            TArray<TSubclassOf<ACSHWeaponBase>> Candidates;
+            for (const auto& Candidate : RandomWeaponClasses)
+            {
+                if (Candidate && !Candidate->HasAnyClassFlags(CLASS_Abstract | CLASS_Deprecated | CLASS_NewerVersionExists))
+                    Candidates.AddUnique(Candidate);
+            }
+            if (Candidates.IsEmpty()) return;
+            SelectedClass = Candidates[FMath::RandRange(0, Candidates.Num() - 1)];
+        }
+        if (!SelectedClass) return;
+        // Guard against overlap callbacks during weapon spawning.
+        bPickupConsumed = true;
+        if (Character->EquipWeapon(SelectedClass))
+        {
+            GetWorldTimerManager().ClearTimer(PickupCheckTimer);
             if (bDestroyAfterPickup) Destroy();
         }
+        else bPickupConsumed = false;
     }
 }
 

@@ -20,6 +20,8 @@ protected:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components") UStaticMeshComponent* PreviewWeaponGlowMesh;
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Pickup|Highlight") UMaterialInterface* ThroughWallGlowMaterial;
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Pickup") TSubclassOf<ACSHWeaponBase> WeaponClass;
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Pickup|Random") bool bRandomWeapon = false;
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Pickup|Random", meta=(EditCondition="bRandomWeapon")) TArray<TSubclassOf<ACSHWeaponBase>> RandomWeaponClasses;
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Pickup") bool bDestroyAfterPickup = true;
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Pickup", meta=(ClampMin="10", Units="cm")) float PickupRadius = 150.0f;
     virtual void BeginPlay() override;
