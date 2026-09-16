@@ -6,6 +6,7 @@
 #include "SS_WaveManager.generated.h"
 
 class ASS_EnemySpawner;
+class USS_WaveWidget;
 
 UCLASS(Blueprintable)
 class SECONDSEMESTER_TEAM_API ASS_WaveManager : public AActor
@@ -21,6 +22,10 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wave")
 	bool bStartFirstWaveOnBeginPlay = true;
+
+	/** Countdown before every wave, including the first one. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wave|UI", meta = (ClampMin = "0.0"))
+	float WaveStartDelay = 3.0f;
 
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Wave")
 	TArray<TObjectPtr<ASS_EnemySpawner>> EnemySpawners;
@@ -61,11 +66,19 @@ private:
 	void HandleEnemyDestroyed(AActor* Enemy);
 	void CheckWaveCompleted();
 	void StartNextWave();
+	void BeginWaveSpawning();
+	void UpdateCountdownDisplay();
+	void EnsureWaveWidget();
 	void SpawnNextEnemy();
 	FTimerHandle WaveSpawnTimer;
+	FTimerHandle WaveStartTimer;
+	FTimerHandle CountdownDisplayTimer;
 	FTimerHandle NextWaveTimer;
+	UPROPERTY(Transient)
+	TObjectPtr<USS_WaveWidget> WaveWidget;
 	TArray<TWeakObjectPtr<AActor>> LivingEnemies;
 	bool bWaveActive = false;
+	bool bIsWaveCountdownActive = false;
 	TArray<FSS_WaveEnemyEntry> PendingEntries;
 	int32 EntryIndex = 0;
 	int32 EntrySpawnCount = 0;

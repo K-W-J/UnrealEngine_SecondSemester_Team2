@@ -2,7 +2,9 @@
 
 #include "Enemies/SS_Enemy.h"
 #include "Enemies/SS_EnemySpawner.h"
+#include "Enemies/SS_WaveWidget.h"
 #include "EngineUtils.h"
+#include "GameFramework/PlayerController.h"
 #include "TimerManager.h"
 
 ASS_WaveManager::ASS_WaveManager()
@@ -23,6 +25,11 @@ void ASS_WaveManager::BeginPlay()
 void ASS_WaveManager::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	StopWave();
+	if (WaveWidget)
+	{
+		WaveWidget->RemoveFromParent();
+		WaveWidget = nullptr;
+	}
 	Super::EndPlay(EndPlayReason);
 }
 
@@ -68,6 +75,30 @@ void ASS_WaveManager::StartWave(int32 WaveIndex)
 			PendingEntries.Add(Entry);
 		}
 	}
+	EnsureWaveWidget();
+	if (WaveStartDelay > 0.0f)
+	{
+		bIsWaveCountdownActive = true;
+		GetWorldTimerManager().SetTimer(WaveStartTimer, this,
+			&ASS_WaveManager::BeginWaveSpawning, WaveStartDelay, false);
+		UpdateCountdownDisplay();
+		GetWorldTimerManager().SetTimer(CountdownDisplayTimer, this,
+			&ASS_WaveManager::UpdateCountdownDisplay, 1.0f, true);
+		return;
+	}
+	BeginWaveSpawning();
+}
+
+void ASS_WaveManager::BeginWaveSpawning()
+{
+	GetWorldTimerManager().ClearTimer(WaveStartTimer);
+	GetWorldTimerManager().ClearTimer(CountdownDisplayTimer);
+	bIsWaveCountdownActive = false;
+	EnsureWaveWidget();
+	if (WaveWidget)
+	{
+		WaveWidget->SetWaveLabel(FString::Printf(TEXT("Wave %d"), CurrentWaveIndex + 1));
+	}
 	if (PendingEntries.IsEmpty())
 	{
 		CheckWaveCompleted();
@@ -75,15 +106,51 @@ void ASS_WaveManager::StartWave(int32 WaveIndex)
 	}
 	bIsSpawningWave = true;
 	GetWorldTimerManager().SetTimer(WaveSpawnTimer, this, &ASS_WaveManager::SpawnNextEnemy,
-		FMath::Max(WaveData[WaveIndex]->SpawnInterval, 0.05f), true);
+		FMath::Max(WaveData[CurrentWaveIndex]->SpawnInterval, 0.05f), true);
 	SpawnNextEnemy();
+}
+
+void ASS_WaveManager::UpdateCountdownDisplay()
+{
+	EnsureWaveWidget();
+	if (WaveWidget && bIsWaveCountdownActive)
+	{
+		const float TimeRemaining = GetWorldTimerManager().GetTimerRemaining(WaveStartTimer);
+		const int32 Seconds = FMath::Max(1, FMath::CeilToInt(TimeRemaining));
+		WaveWidget->SetWaveLabel(FString::Printf(TEXT("Wave %d  -  %d"),
+			CurrentWaveIndex + 1, Seconds));
+	}
+}
+
+void ASS_WaveManager::EnsureWaveWidget()
+{
+	if (WaveWidget || !GetWorld())
+	{
+		return;
+	}
+	APlayerController* PlayerController = GetWorld()->GetFirstPlayerController();
+	if (PlayerController && PlayerController->IsLocalController())
+	{
+		WaveWidget = CreateWidget<USS_WaveWidget>(PlayerController, USS_WaveWidget::StaticClass());
+		if (WaveWidget)
+		{
+			WaveWidget->AddToPlayerScreen(20);
+		}
+	}
 }
 
 void ASS_WaveManager::StopWave()
 {
 	GetWorldTimerManager().ClearTimer(WaveSpawnTimer);
+	GetWorldTimerManager().ClearTimer(WaveStartTimer);
+	GetWorldTimerManager().ClearTimer(CountdownDisplayTimer);
 	GetWorldTimerManager().ClearTimer(NextWaveTimer);
 	bWaveActive = false;
+	bIsWaveCountdownActive = false;
+	if (WaveWidget)
+	{
+		WaveWidget->SetWaveLabel(FString());
+	}
 	for (const TWeakObjectPtr<AActor>& Enemy : LivingEnemies)
 	{
 		if (Enemy.IsValid())
@@ -153,7 +220,7 @@ void ASS_WaveManager::NotifyEnemyDied(AActor* Enemy)
 
 void ASS_WaveManager::CheckWaveCompleted()
 {
-	if (!bWaveActive || bIsSpawningWave || AliveEnemyCount > 0)
+	if (!bWaveActive || bIsWaveCountdownActive || bIsSpawningWave || AliveEnemyCount > 0)
 	{
 		return;
 	}
