@@ -14,6 +14,8 @@ class USceneComponent;
 class USpringArmComponent;
 class UInputAction;
 class ACSHWeaponBase;
+class ASS_Enemy;
+class UCSHDamageBorderWidget;
 struct FInputActionValue;
 
 DECLARE_LOG_CATEGORY_EXTERN(LogTemplateCharacter, Log, All);
@@ -71,6 +73,48 @@ public:
 	void UpdateBodyVisibility(bool bFirstPerson);
 	virtual float TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, AController* EventInstigator, AActor* DamageCauser) override;
 
+	/** Launches the player away from an enemy car when the two collide. */
+	void ApplyEnemyCarImpact(ASS_Enemy* Enemy);
+
+	/** Horizontal launch speed produced by a car moving at EnemyImpactReferenceSpeed. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Player|Enemy Impact", meta=(ClampMin="0", Units="cm/s", DisplayName="Horizontal Launch at Reference Speed"))
+	float EnemyImpactHorizontalSpeed = 1100.0f;
+
+	/** Upward launch speed produced by a car moving at EnemyImpactReferenceSpeed. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Player|Enemy Impact", meta=(ClampMin="0", Units="cm/s", DisplayName="Upward Launch at Reference Speed"))
+	float EnemyImpactUpwardSpeed = 350.0f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Player|Enemy Impact", meta=(ClampMin="1", Units="cm/s"))
+	float EnemyImpactReferenceSpeed = 1000.0f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Player|Enemy Impact", meta=(ClampMin="0", Units="cm/s"))
+	float MaximumEnemyImpactHorizontalSpeed = 3200.0f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Player|Enemy Impact", meta=(ClampMin="0", Units="cm/s"))
+	float MaximumEnemyImpactUpwardSpeed = 900.0f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Player|Enemy Impact", meta=(ClampMin="0", Units="s"))
+	float EnemyImpactCooldown = 0.5f;
+
+	/** Damage for each 100 cm/s of closing speed when an enemy car hits the player. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Player|Enemy Impact", meta=(ClampMin="0"))
+	float EnemyImpactDamagePer100Speed = 2.0f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Player|Enemy Impact", meta=(ClampMin="0", Units="cm/s"))
+	float MinimumEnemyImpactDamageSpeed = 150.0f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Player|Enemy Impact", meta=(ClampMin="0"))
+	float MaximumEnemyImpactDamage = 40.0f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Player|Damage Border", meta=(ClampMin="0.05", Units="s"))
+	float DamageBorderDuration = 0.7f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Player|Damage Border")
+	FLinearColor DamageBorderColor = FLinearColor(1.0f, 0.025f, 0.025f, 1.0f);
+
+	UPROPERTY(Transient, VisibleInstanceOnly, BlueprintReadOnly, Category="Player|Damage Border")
+	TObjectPtr<UCSHDamageBorderWidget> DamageBorderWidget;
+
 	UFUNCTION(BlueprintCallable, Category="Player|Health")
 	void Heal(float HealAmount);
 
@@ -81,6 +125,13 @@ public:
     void ApplyExplosionCameraShake(const FVector& ExplosionLocation, float InnerRadius, float OuterRadius);
 
 protected:
+	UFUNCTION()
+	void OnEnemyCarActorHit(AActor* SelfActor, AActor* OtherActor, FVector NormalImpulse, const FHitResult& Hit);
+
+	UFUNCTION()
+	void OnEnemyCarCapsuleHit(UPrimitiveComponent* HitComponent, AActor* OtherActor,
+		UPrimitiveComponent* OtherComponent, FVector NormalImpulse, const FHitResult& Hit);
+
 
 	/** Called from Input Actions for movement input */
 	void MoveInput(const FInputActionValue& Value);
@@ -117,6 +168,8 @@ protected:
 	void UpdateSprint(float DeltaSeconds);
 	void ApplyDamageCameraKick(float DamageAmount, const AActor* DamageCauser);
 	void UpdateDamageCameraKick(float DeltaSeconds);
+	void UpdateDamageBorder(float DeltaSeconds);
+	void EnsureDamageBorderWidget();
 	void UpdateExplosionCameraShake(float DeltaSeconds);
 	void DebugTakeDamage();
 	void DebugHeal();
@@ -176,6 +229,8 @@ public:
 	float DamageKickRecoverySpeed = 5.0f;
 
 private:
+	double NextEnemyImpactTime = 0.0;
+	float DamageBorderTimeRemaining = 0.0f;
 	bool bSprintRequested = false;
 	bool bIsSprinting = false;
 	float TimeSinceSprintStopped = 0.0f;

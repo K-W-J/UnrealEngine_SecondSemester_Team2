@@ -17,6 +17,9 @@ class SECONDSEMESTER_TEAM_API ASS_Enemy : public ACharacter
 public:
 	ASS_Enemy();
 
+	/** Velocity sampled before the latest physics impact; used for impact damage. */
+	FVector GetRecentDriveVelocity() const { return RecentDriveVelocity; }
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Audio")
 	bool bEnableRandomSound = true;
 
@@ -44,8 +47,18 @@ public:
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "SS Enemy Combat")
 	bool bIsDead = false;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Combat", meta = (ClampMin = "0.0"))
+	/** Damage per car at the reference closing speed below. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Combat", meta = (ClampMin = "0.0", DisplayName = "Car Collision Damage at Reference Speed"))
 	float CollisionDamage = 5.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Combat", meta = (ClampMin = "1.0", Units = "cm/s"))
+	float CollisionDamageReferenceSpeed = 1000.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Combat", meta = (ClampMin = "0.0", Units = "cm/s"))
+	float MinimumCollisionDamageSpeed = 150.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Combat", meta = (ClampMin = "0.0"))
+	float MaximumCollisionDamage = 20.0f;
 
 	/** Minimum seconds between collision damage ticks on this car. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Combat", meta = (ClampMin = "0.05", Units = "s"))
@@ -65,6 +78,9 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "SS Enemy Combat")
 	void ApplyCarDamage(float Damage, FVector HitLocation);
+
+	virtual float TakeDamage(float DamageAmount, const FDamageEvent& DamageEvent,
+		AController* EventInstigator, AActor* DamageCauser) override;
 
 	UFUNCTION(BlueprintImplementableEvent, Category = "SS Enemy Combat")
 	void OnCarDamaged(float Damage, FVector HitLocation);
@@ -145,6 +161,16 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Movement", meta = (ClampMin = "0.0"))
 	float TargetAcceptanceRadius = 140.0f;
 
+	/** Within this planar distance, rush directly toward the player instead of following path points. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Movement|Charge", meta = (ClampMin = "0.0", Units = "cm"))
+	float DirectChargeRadius = 800.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Movement|Charge", meta = (ClampMin = "1.0"))
+	float DirectChargeForceMultiplier = 1.6f;
+
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "SS Enemy Movement|Charge")
+	bool bDirectChargeWithinRange = false;
+
 	/** Seconds between path updates while the target is moving. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Movement", meta = (ClampMin = "0.05"))
 	float PathRecalculationInterval = 0.35f;
@@ -165,9 +191,12 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SS Enemy Movement")
 	bool bHasValidNavigationPath = false;
 
-	/** True when the target is outside the vehicle NavMesh and is pursued directly. */
+	/** True when either the enemy or target is outside the NavMesh and direct pursuit is used. */
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "SS Enemy Movement|Navigation")
 	bool bDirectlyFollowingOffNavTarget = false;
+
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "SS Enemy Movement|Navigation")
+	bool bEnemyOutsideNavigation = false;
 
 	/** Circular navigation footprint that contains the Box even while the car is rotating. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Movement|Navigation", meta = (ClampMin = "1.0"))
@@ -205,6 +234,7 @@ public:
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 
 private:
+	FVector RecentDriveVelocity = FVector::ZeroVector;
 	void ScheduleRandomSound();
 	void PlayRandomSound();
 	FTimerHandle RandomSoundTimer;
@@ -213,7 +243,7 @@ private:
 	float NavigationRecoveryCheckTime = 0.0f;
 	UFUNCTION()
 	void HandleCarHit(AActor* SelfActor, AActor* OtherActor, FVector NormalImpulse, const FHitResult& Hit);
-	void ApplyCollisionDamage(FVector HitLocation);
+	void ApplyCollisionDamage(FVector HitLocation, float ClosingSpeed);
 	double NextCollisionDamageTime = 0.0;
 	void RebuildNavigationPath();
 	void ApplyPathFollowingForce(float DeltaTime);

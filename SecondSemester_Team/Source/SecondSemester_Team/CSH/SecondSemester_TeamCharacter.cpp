@@ -16,6 +16,9 @@
 #include "SecondSemester_Team.h"
 #include "CSHWeaponBase.h"
 #include "InputCoreTypes.h"
+#include "Enemies/SS_Enemy.h"
+#include "CSHDamageBorderWidget.h"
+#include "Blueprint/UserWidget.h"
 
 ASecondSemester_TeamCharacter::ASecondSemester_TeamCharacter()
 {
@@ -74,6 +77,9 @@ GetMesh()->SetRenderCustomDepth(true);
 GetMesh()->SetCustomDepthStencilValue(42);
 
 	GetCapsuleComponent()->SetCapsuleSize(34.0f, 96.0f);
+	GetCapsuleComponent()->SetNotifyRigidBodyCollision(true);
+	OnActorHit.AddUniqueDynamic(this, &ASecondSemester_TeamCharacter::OnEnemyCarActorHit);
+	GetCapsuleComponent()->OnComponentHit.AddUniqueDynamic(this, &ASecondSemester_TeamCharacter::OnEnemyCarCapsuleHit);
 
 	// Configure character movement
 	GetCharacterMovement()->BrakingDecelerationFalling = 1500.0f;
@@ -88,6 +94,8 @@ void ASecondSemester_TeamCharacter::Tick(float DeltaSeconds)
     UpdateBodyVisibility(FirstPersonCameraComponent->IsActive() && !CSHDeathCamera->IsActive());
 	UpdateSprint(DeltaSeconds);
 	UpdateDamageCameraKick(DeltaSeconds);
+	EnsureDamageBorderWidget();
+	UpdateDamageBorder(DeltaSeconds);
 	UpdateExplosionCameraShake(DeltaSeconds);
 }
 
@@ -97,6 +105,97 @@ void ASecondSemester_TeamCharacter::BeginPlay()
     CSHDeathCamera->Deactivate();
     FirstPersonCameraComponent->Activate();
     UpdateBodyVisibility(true);
+	EnsureDamageBorderWidget();
+}
+
+void ASecondSemester_TeamCharacter::EnsureDamageBorderWidget()
+{
+	if (DamageBorderWidget)
+	{
+		return;
+	}
+	if (APlayerController* PlayerController = Cast<APlayerController>(Controller))
+	{
+		DamageBorderWidget = CreateWidget<UCSHDamageBorderWidget>(
+			PlayerController, UCSHDamageBorderWidget::StaticClass());
+		if (DamageBorderWidget)
+		{
+			DamageBorderWidget->SetFlashTint(DamageBorderColor);
+			DamageBorderWidget->AddToPlayerScreen(20);
+			DamageBorderWidget->SetFlashOpacity(
+				DamageBorderTimeRemaining / FMath::Max(DamageBorderDuration, 0.05f));
+		}
+	}
+}
+
+void ASecondSemester_TeamCharacter::OnEnemyCarActorHit(AActor* SelfActor, AActor* OtherActor,
+	FVector NormalImpulse, const FHitResult& Hit)
+{
+	if (ASS_Enemy* Enemy = Cast<ASS_Enemy>(OtherActor))
+	{
+		ApplyEnemyCarImpact(Enemy);
+	}
+}
+
+void ASecondSemester_TeamCharacter::OnEnemyCarCapsuleHit(UPrimitiveComponent* HitComponent,
+	AActor* OtherActor, UPrimitiveComponent* OtherComponent, FVector NormalImpulse, const FHitResult& Hit)
+{
+	if (ASS_Enemy* Enemy = Cast<ASS_Enemy>(OtherActor))
+	{
+		ApplyEnemyCarImpact(Enemy);
+	}
+}
+
+void ASecondSemester_TeamCharacter::ApplyEnemyCarImpact(ASS_Enemy* Enemy)
+{
+	if (!IsValid(Enemy) || Enemy->bIsDead || bDeathStateEntered || Health <= 0.0f || !GetWorld())
+	{
+		return;
+	}
+	const double Now = GetWorld()->GetTimeSeconds();
+	if (Now < NextEnemyImpactTime)
+	{
+		return;
+	}
+	FVector AwayFromEnemy = GetActorLocation() - Enemy->GetActorLocation();
+	AwayFromEnemy.Z = 0.0f;
+	if (!AwayFromEnemy.Normalize())
+	{
+		AwayFromEnemy = -Enemy->GetVelocity().GetSafeNormal2D();
+		if (AwayFromEnemy.IsNearlyZero())
+		{
+			AwayFromEnemy = -GetActorForwardVector().GetSafeNormal2D();
+		}
+	}
+	const float CurrentClosingSpeed = FVector::DotProduct(
+		Enemy->GetVelocity(), AwayFromEnemy);
+	const float RecentClosingSpeed = FVector::DotProduct(
+		Enemy->GetRecentDriveVelocity(), AwayFromEnemy);
+	const float ClosingSpeed = FMath::Max(0.0f, FMath::Max(CurrentClosingSpeed, RecentClosingSpeed));
+	if (ClosingSpeed <= 0.0f)
+	{
+		return;
+	}
+	NextEnemyImpactTime = Now + FMath::Max(0.0f, EnemyImpactCooldown);
+	const float ImpactDamage = ClosingSpeed >= MinimumEnemyImpactDamageSpeed
+		? FMath::Clamp(ClosingSpeed / 100.0f * EnemyImpactDamagePer100Speed,
+			0.0f, MaximumEnemyImpactDamage)
+		: 0.0f;
+	const float LaunchScale = ClosingSpeed / FMath::Max(EnemyImpactReferenceSpeed, 1.0f);
+	const float HorizontalLaunchSpeed = FMath::Clamp(
+		EnemyImpactHorizontalSpeed * LaunchScale, 0.0f, MaximumEnemyImpactHorizontalSpeed);
+	const float UpwardLaunchSpeed = FMath::Clamp(
+		EnemyImpactUpwardSpeed * LaunchScale, 0.0f, MaximumEnemyImpactUpwardSpeed);
+	if (HorizontalLaunchSpeed > 0.0f || UpwardLaunchSpeed > 0.0f)
+	{
+		LaunchCharacter(AwayFromEnemy * HorizontalLaunchSpeed
+			+ FVector::UpVector * UpwardLaunchSpeed, true, true);
+	}
+	if (ImpactDamage > 0.0f)
+	{
+		UGameplayStatics::ApplyDamage(this, ImpactDamage, Enemy->GetController(),
+			Enemy, UDamageType::StaticClass());
+	}
 }
 
 void ASecondSemester_TeamCharacter::UpdateBodyVisibility(bool bFirstPerson)
@@ -136,6 +235,13 @@ float ASecondSemester_TeamCharacter::TakeDamage(float DamageAmount, FDamageEvent
 	if (FinalDamage > 0.0f)
 	{
 		ApplyDamageCameraKick(FinalDamage, DamageCauser);
+		DamageBorderTimeRemaining = FMath::Max(DamageBorderDuration, 0.05f);
+		EnsureDamageBorderWidget();
+		if (DamageBorderWidget)
+		{
+			DamageBorderWidget->SetFlashTint(DamageBorderColor);
+			DamageBorderWidget->SetFlashOpacity(1.0f);
+		}
 	}
 	if (Health <= 0.0f)
 	{
@@ -215,6 +321,17 @@ void ASecondSemester_TeamCharacter::UpdateDamageCameraKick(float DeltaSeconds)
 	const FRotator PreviousKick = DamageCameraKick;
 	DamageCameraKick = FMath::RInterpTo(DamageCameraKick, FRotator::ZeroRotator, DeltaSeconds, DamageKickRecoverySpeed);
 	Controller->SetControlRotation((Controller->GetControlRotation() + (DamageCameraKick - PreviousKick)).GetNormalized());
+}
+
+void ASecondSemester_TeamCharacter::UpdateDamageBorder(float DeltaSeconds)
+{
+	if (!DamageBorderWidget || DamageBorderTimeRemaining <= 0.0f)
+	{
+		return;
+	}
+	DamageBorderTimeRemaining = FMath::Max(0.0f, DamageBorderTimeRemaining - DeltaSeconds);
+	const float Duration = FMath::Max(DamageBorderDuration, 0.05f);
+	DamageBorderWidget->SetFlashOpacity(DamageBorderTimeRemaining / Duration);
 }
 
 void ASecondSemester_TeamCharacter::ApplyExplosionCameraShake(const FVector& ExplosionLocation, float InnerRadius, float OuterRadius)

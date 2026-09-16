@@ -13,6 +13,8 @@
 #include "Sound/SoundBase.h"
 #include "Components/AudioComponent.h"
 #include "TimerManager.h"
+#include "Engine/DamageEvents.h"
+#include "CSH/SecondSemester_TeamCharacter.h"
 
 ASS_Enemy::ASS_Enemy()
 {
@@ -166,16 +168,12 @@ void ASS_Enemy::Tick(float DeltaTime)
 	{
 		return;
 	}
+	RecentDriveVelocity = GetVelocity();
 	NavigationRecoveryCheckTime -= DeltaTime;
 	if (NavigationRecoveryCheckTime <= 0.0f)
 	{
 		NavigationRecoveryCheckTime = 0.1f;
 		UpdateNavigationRecovery();
-	}
-	if (bEnableNavigationRecovery && bReturningToNavigation)
-	{
-		ApplyNavigationRecoveryForce();
-		return;
 	}
 
 	if (!IsValid(FollowTarget))
@@ -185,6 +183,14 @@ void ASS_Enemy::Tick(float DeltaTime)
 		{
 			return;
 		}
+	}
+
+	const bool bPlayerWithinChargeRange = DirectChargeRadius > 0.0f
+		&& FVector::DistSquared2D(GetActorLocation(), FollowTarget->GetActorLocation())
+			<= FMath::Square(DirectChargeRadius);
+	if (bDirectChargeWithinRange != bPlayerWithinChargeRange)
+	{
+		PathRecalculationTimeRemaining = 0.0f;
 	}
 
 	PathRecalculationTimeRemaining -= DeltaTime;
@@ -198,15 +204,8 @@ void ASS_Enemy::Tick(float DeltaTime)
 
 void ASS_Enemy::UpdateNavigationRecovery()
 {
-	if (!bEnableNavigationRecovery)
-	{
-		if (bReturningToNavigation)
-		{
-			PathRecalculationTimeRemaining = 0.0f;
-		}
-		bReturningToNavigation = false;
-		return;
-	}
+	// Saved-point recovery is no longer used; off-mesh cars pursue the player.
+	bReturningToNavigation = false;
 	UNavigationSystemV1* NavSystem = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld());
 	UCharacterMovementComponent* Movement = GetCharacterMovement();
 	if (!NavSystem || !Movement)
@@ -224,29 +223,10 @@ void ASS_Enemy::UpdateNavigationRecovery()
 	const bool bOnNavigation = NavSystem->ProjectPointToNavigation(
 		FeetLocation, ProjectedPoint, FVector(25.0f, 25.0f, 100.0f), NavData)
 		&& FVector::DistSquared2D(FeetLocation, ProjectedPoint.Location) <= FMath::Square(25.0f);
-	if (bReturningToNavigation)
+	if (bEnemyOutsideNavigation != !bOnNavigation)
 	{
-		// Keep the saved point fixed during recovery; do not replace it with an edge point.
-		if (bOnNavigation && FVector::DistSquared2D(FeetLocation, LastValidNavigationPoint)
-			<= FMath::Square(RecoveryAcceptanceRadius))
-		{
-			bReturningToNavigation = false;
-			PathRecalculationTimeRemaining = 0.0f;
-			StraightAccelerationAlpha = 0.0f;
-		}
-		return;
-	}
-	if (bOnNavigation)
-	{
-		LastValidNavigationPoint = ProjectedPoint.Location;
-		bHasSavedNavigationPoint = true;
-	}
-	else if (bHasSavedNavigationPoint)
-	{
-		bReturningToNavigation = true;
-		NavigationPoints.Reset();
-		CurrentPathPointIndex = INDEX_NONE;
-		bHasValidNavigationPath = false;
+		bEnemyOutsideNavigation = !bOnNavigation;
+		PathRecalculationTimeRemaining = 0.0f;
 	}
 }
 
@@ -283,22 +263,47 @@ void ASS_Enemy::ApplyNavigationRecoveryForce()
 
 void ASS_Enemy::HandleCarHit(AActor* SelfActor, AActor* OtherActor, FVector NormalImpulse, const FHitResult& Hit)
 {
+	if (ASecondSemester_TeamCharacter* Player = Cast<ASecondSemester_TeamCharacter>(OtherActor))
+	{
+		Player->ApplyEnemyCarImpact(this);
+		return;
+	}
 	ASS_Enemy* OtherCar = Cast<ASS_Enemy>(OtherActor);
 	if (bIsDead || !IsValid(OtherCar) || OtherCar == this || OtherCar->bIsDead)
 	{
 		return;
 	}
+	FVector ToOther = OtherCar->GetActorLocation() - GetActorLocation();
+	ToOther.Z = 0.0f;
+	if (!ToOther.Normalize())
+	{
+		ToOther = GetRecentDriveVelocity().GetSafeNormal2D();
+	}
+	const float CurrentClosingSpeed = FVector::DotProduct(
+		GetVelocity() - OtherCar->GetVelocity(), ToOther);
+	const float RecentClosingSpeed = FVector::DotProduct(
+		GetRecentDriveVelocity() - OtherCar->GetRecentDriveVelocity(), ToOther);
+	const float ClosingSpeed = FMath::Max(0.0f,
+		FMath::Max(CurrentClosingSpeed, RecentClosingSpeed));
 	// Damage both cars; cooldown prevents duplicate callbacks from doubling damage.
-	ApplyCollisionDamage(Hit.ImpactPoint);
+	ApplyCollisionDamage(Hit.ImpactPoint, ClosingSpeed);
 	if (IsValid(OtherCar))
 	{
-		OtherCar->ApplyCollisionDamage(Hit.ImpactPoint);
+		OtherCar->ApplyCollisionDamage(Hit.ImpactPoint, ClosingSpeed);
 	}
 }
 
-void ASS_Enemy::ApplyCollisionDamage(FVector HitLocation)
+void ASS_Enemy::ApplyCollisionDamage(FVector HitLocation, float ClosingSpeed)
 {
-	if (bIsDead || !GetWorld() || CollisionDamage <= 0.0f)
+	if (bIsDead || !GetWorld() || CollisionDamage <= 0.0f
+		|| ClosingSpeed < MinimumCollisionDamageSpeed)
+	{
+		return;
+	}
+	const float Damage = FMath::Clamp(
+		ClosingSpeed / FMath::Max(CollisionDamageReferenceSpeed, 1.0f)
+			* CollisionDamage, 0.0f, MaximumCollisionDamage);
+	if (Damage <= 0.0f)
 	{
 		return;
 	}
@@ -308,7 +313,38 @@ void ASS_Enemy::ApplyCollisionDamage(FVector HitLocation)
 		return;
 	}
 	NextCollisionDamageTime = Now + FMath::Max(CollisionDamageCooldown, 0.05f);
-	ApplyCarDamage(CollisionDamage, HitLocation);
+	ApplyCarDamage(Damage, HitLocation);
+}
+
+float ASS_Enemy::TakeDamage(float DamageAmount, const FDamageEvent& DamageEvent,
+	AController* EventInstigator, AActor* DamageCauser)
+{
+	if (bIsDead || IsActorBeingDestroyed() || !CanBeDamaged()
+		|| !FMath::IsFinite(DamageAmount) || DamageAmount <= 0.0f)
+	{
+		return 0.0f;
+	}
+	const float ActualDamage = Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
+	if (ActualDamage <= 0.0f || bIsDead || IsActorBeingDestroyed())
+	{
+		return 0.0f;
+	}
+	FVector HitLocation = GetActorLocation();
+	if (DamageEvent.IsOfType(FPointDamageEvent::ClassID))
+	{
+		HitLocation = static_cast<const FPointDamageEvent&>(DamageEvent).HitInfo.ImpactPoint;
+	}
+	else if (DamageEvent.IsOfType(FRadialDamageEvent::ClassID))
+	{
+		const FRadialDamageEvent& RadialEvent = static_cast<const FRadialDamageEvent&>(DamageEvent);
+		if (!RadialEvent.ComponentHits.IsEmpty())
+		{
+			HitLocation = RadialEvent.ComponentHits[0].ImpactPoint;
+		}
+	}
+	const float HealthDamage = FMath::Min(ActualDamage, CurrentHealth);
+	ApplyCarDamage(ActualDamage, HitLocation);
+	return HealthDamage;
 }
 
 void ASS_Enemy::ApplyCarDamage(float Damage, FVector HitLocation)
@@ -358,6 +394,7 @@ void ASS_Enemy::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 void ASS_Enemy::SetFollowTarget(AActor* NewTarget)
 {
 	bDirectlyFollowingOffNavTarget = false;
+	bDirectChargeWithinRange = false;
 	FollowTarget = IsValid(NewTarget) ? NewTarget : UGameplayStatics::GetPlayerPawn(this, 0);
 	PathRecalculationTimeRemaining = 0.0f;
 	NavigationPoints.Reset();
@@ -369,6 +406,7 @@ void ASS_Enemy::SetFollowTarget(AActor* NewTarget)
 void ASS_Enemy::RebuildNavigationPath()
 {
 	bDirectlyFollowingOffNavTarget = false;
+	bDirectChargeWithinRange = false;
 	PathRecalculationTimeRemaining = PathRecalculationInterval;
 	NavigationPoints.Reset();
 	CurrentPathPointIndex = INDEX_NONE;
@@ -376,6 +414,19 @@ void ASS_Enemy::RebuildNavigationPath()
 
 	if (!IsValid(FollowTarget) || GetWorld() == nullptr)
 	{
+		return;
+	}
+	if (DirectChargeRadius > 0.0f
+		&& FVector::DistSquared2D(GetActorLocation(), FollowTarget->GetActorLocation())
+			<= FMath::Square(DirectChargeRadius))
+	{
+		bDirectChargeWithinRange = true;
+		bDirectlyFollowingOffNavTarget = true;
+		return;
+	}
+	if (bEnemyOutsideNavigation)
+	{
+		bDirectlyFollowingOffNavTarget = true;
 		return;
 	}
 
@@ -452,7 +503,8 @@ void ASS_Enemy::ApplyPathFollowingForce(float DeltaTime)
 	}
 
 	const FVector ActorLocation = GetActorLocation();
-	if (FVector::DistSquared2D(ActorLocation, FollowTarget->GetActorLocation()) <=
+	if (!bDirectlyFollowingOffNavTarget
+		&& FVector::DistSquared2D(ActorLocation, FollowTarget->GetActorLocation()) <=
 		FMath::Square(TargetAcceptanceRadius))
 	{
 		ApplyStoppingForce();
@@ -540,7 +592,11 @@ void ASS_Enemy::ApplyPathFollowingForce(float DeltaTime)
 	const float CurbForceMultiplier = bClimbableCurbAhead
 		? FMath::Max(CurbDriveForceMultiplier, 1.0f)
 		: 1.0f;
-	const float EffectiveMaxMovementForce = MaxMovementForce * CurbForceMultiplier;
+	const float ChargeForceMultiplier = bDirectChargeWithinRange
+		? FMath::Max(DirectChargeForceMultiplier, 1.0f)
+		: 1.0f;
+	const float EffectiveMaxMovementForce =
+		MaxMovementForce * CurbForceMultiplier * ChargeForceMultiplier;
 	const FVector DriveAcceleration = Direction * EffectiveMaxMovementForce * DriveForceRatio * Throttle;
 	const FVector DragAcceleration = -CurrentPlanarVelocity * SteeringGain;
 	FVector AppliedAcceleration =
