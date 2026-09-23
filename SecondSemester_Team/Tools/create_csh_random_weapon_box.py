@@ -10,7 +10,7 @@ for asset_path in sorted(lib.list_assets(root, recursive=True)):
         continue
     cls = asset.generated_class()
     cdo = unreal.get_default_object(cls)
-    if isinstance(cdo, unreal.CSHWeaponBase) and asset.get_name() != 'BP_CSH_WeaponBase':
+    if isinstance(cdo, unreal.CSHWeaponBase) and asset.get_name() not in ('BP_CSH_WeaponBase','BP_CSH_Fists'):
         if cdo.get_editor_property('weapon_mesh').get_editor_property('static_mesh'):
             weapons.append(cls)
             unreal.log_warning('RANDOM_POOL: ' + cls.get_path_name())

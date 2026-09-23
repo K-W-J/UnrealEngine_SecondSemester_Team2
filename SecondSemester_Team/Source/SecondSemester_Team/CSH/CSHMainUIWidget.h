@@ -25,4 +25,6 @@ private:
 
     UPROPERTY(Transient)
     TObjectPtr<UUserWidget> PlayerStatusUIInstance;
+    UPROPERTY(Transient)
+    TObjectPtr<UUserWidget> RadarUIInstance;
 };
