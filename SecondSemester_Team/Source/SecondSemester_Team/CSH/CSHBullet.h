@@ -41,7 +41,10 @@ protected:
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Tracer", meta=(ClampMin="0")) float TracerLightIntensity = 1200.0f;
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Lifetime", meta=(ClampMin="0.1", Units="s")) float LifeSeconds = 3.0f;
     virtual void BeginPlay() override;
+    virtual void Tick(float DeltaSeconds) override;
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Projectile|Rotation") FRotator SpinRate = FRotator::ZeroRotator;
     int32 PenetrationCount = 0;
+    TSet<TWeakObjectPtr<AActor>> BounceDamagedActors;
     void AcquireHomingTarget();
     UFUNCTION() void OnBulletHit(UPrimitiveComponent* HitComponent, AActor* OtherActor, UPrimitiveComponent* OtherComponent, FVector NormalImpulse, const FHitResult& Hit);
 };
