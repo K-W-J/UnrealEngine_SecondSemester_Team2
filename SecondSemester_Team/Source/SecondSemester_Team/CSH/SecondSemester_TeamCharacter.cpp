@@ -12,13 +12,17 @@
 #include "EnhancedInputComponent.h"
 #include "InputActionValue.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "GameFramework/GameModeBase.h"
+#include "Camera/CameraActor.h"
 #include "Kismet/GameplayStatics.h"
 #include "SecondSemester_Team.h"
 #include "CSHWeaponBase.h"
-#include "CSHFists.h"
 #include "InputCoreTypes.h"
 #include "Enemies/SS_Enemy.h"
+#include "Enemies/SS_WaveManager.h"
 #include "CSHDamageBorderWidget.h"
+#include "CSHGameOverWidget.h"
+#include "CSHStartMenuWidget.h"
 #include "Blueprint/UserWidget.h"
 
 ASecondSemester_TeamCharacter::ASecondSemester_TeamCharacter()
@@ -98,20 +102,130 @@ void ASecondSemester_TeamCharacter::Tick(float DeltaSeconds)
 	EnsureDamageBorderWidget();
 	UpdateDamageBorder(DeltaSeconds);
 	UpdateExplosionCameraShake(DeltaSeconds);
+	if (bShowStartMenuOnBeginPlay && !bStartMenuPresented)
+	{
+		ShowStartMenuWidget();
+	}
 }
 
 void ASecondSemester_TeamCharacter::BeginPlay()
 {
     Super::BeginPlay();
+	if (const AGameModeBase* GameMode = UGameplayStatics::GetGameMode(this))
+	{
+		if (UGameplayStatics::HasOption(GameMode->OptionsString, TEXT("SkipTitle")))
+		{
+			bShowStartMenuOnBeginPlay = false;
+			bStartMenuPresented = true;
+		}
+	}
     CSHDeathCamera->Deactivate();
     FirstPersonCameraComponent->Activate();
     UpdateBodyVisibility(true);
 	EnsureDamageBorderWidget();
-    if (!IsValid(CurrentWeapon))
-    {
-        UClass* FistsClass=LoadClass<ACSHFists>(nullptr,TEXT("/Game/CSH/Buleprint/Weapons/Fists/BP_CSH_Fists.BP_CSH_Fists_C"));
-        EquipWeapon(FistsClass ? FistsClass : ACSHFists::StaticClass());
-    }
+	ShowStartMenuWidget();
+}
+
+void ASecondSemester_TeamCharacter::ShowStartMenuWidget()
+{
+	if (!bShowStartMenuOnBeginPlay || bStartMenuPresented)
+	{
+		return;
+	}
+	APlayerController* PlayerController = Cast<APlayerController>(Controller);
+	if (!PlayerController || !PlayerController->IsLocalController())
+	{
+		return;
+	}
+
+	StartMenuWidget = CreateWidget<UCSHStartMenuWidget>(
+		PlayerController, UCSHStartMenuWidget::StaticClass());
+	if (!StartMenuWidget)
+	{
+		return;
+	}
+
+	bStartMenuPresented = true;
+	SetGameplayUIVisible(false);
+	TArray<AActor*> TaggedTitleCameras;
+	UGameplayStatics::GetAllActorsWithTag(this, TEXT("TitleCamera"), TaggedTitleCameras);
+	for (AActor* TaggedActor : TaggedTitleCameras)
+	{
+		if (ACameraActor* CameraActor = Cast<ACameraActor>(TaggedActor))
+		{
+			ActiveTitleCamera = CameraActor;
+			break;
+		}
+	}
+	if (!ActiveTitleCamera && GetWorld())
+	{
+		const FVector CameraLocation = GetActorLocation()
+			+ GetActorForwardVector() * TitleCameraLocalOffset.X
+			+ GetActorRightVector() * TitleCameraLocalOffset.Y
+			+ FVector::UpVector * TitleCameraLocalOffset.Z;
+		const FVector FocusLocation = GetActorLocation()
+			+ GetActorForwardVector() * TitleCameraFocusLocalOffset.X
+			+ GetActorRightVector() * TitleCameraFocusLocalOffset.Y
+			+ FVector::UpVector * TitleCameraFocusLocalOffset.Z;
+		FActorSpawnParameters SpawnParameters;
+		SpawnParameters.Owner = this;
+		SpawnParameters.SpawnCollisionHandlingOverride =
+			ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		ActiveTitleCamera = GetWorld()->SpawnActor<ACameraActor>(
+			CameraLocation, (FocusLocation - CameraLocation).Rotation(), SpawnParameters);
+		if (ActiveTitleCamera)
+		{
+			ActiveTitleCamera->Tags.AddUnique(TEXT("TitleCamera"));
+			ActiveTitleCamera->GetCameraComponent()->SetFieldOfView(65.0f);
+			bSpawnedRuntimeTitleCamera = true;
+		}
+	}
+	if (ActiveTitleCamera)
+	{
+		PlayerController->SetViewTarget(ActiveTitleCamera);
+	}
+	StartMenuWidget->AddToPlayerScreen(200);
+	FInputModeUIOnly InputMode;
+	InputMode.SetWidgetToFocus(StartMenuWidget->TakeWidget());
+	InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+	PlayerController->SetInputMode(InputMode);
+	PlayerController->SetShowMouseCursor(true);
+	UGameplayStatics::SetGamePaused(this, true);
+}
+
+void ASecondSemester_TeamCharacter::FinishTitleScreen()
+{
+	SetGameplayUIVisible(true);
+	if (APlayerController* PlayerController = Cast<APlayerController>(Controller))
+	{
+		PlayerController->SetViewTargetWithBlend(
+			this, TitleCameraBlendDuration, VTBlend_Cubic);
+	}
+	if (bSpawnedRuntimeTitleCamera && ActiveTitleCamera)
+	{
+		ActiveTitleCamera->SetLifeSpan(FMath::Max(TitleCameraBlendDuration + 0.15f, 0.2f));
+	}
+	bSpawnedRuntimeTitleCamera = false;
+	ActiveTitleCamera = nullptr;
+}
+
+void ASecondSemester_TeamCharacter::SetGameplayUIVisible(bool bVisible)
+{
+	if (ASecondSemester_TeamPlayerController* PlayerController =
+		Cast<ASecondSemester_TeamPlayerController>(Controller))
+	{
+		PlayerController->SetGameplayHUDVisible(bVisible);
+	}
+
+	TArray<AActor*> WaveManagers;
+	UGameplayStatics::GetAllActorsOfClass(this, ASS_WaveManager::StaticClass(), WaveManagers);
+	for (AActor* Actor : WaveManagers)
+	{
+		if (ASS_WaveManager* WaveManager = Cast<ASS_WaveManager>(Actor))
+		{
+			WaveManager->SetWaveUIVisible(bVisible);
+		}
+	}
 }
 
 void ASecondSemester_TeamCharacter::EnsureDamageBorderWidget()
@@ -238,6 +352,10 @@ float ASecondSemester_TeamCharacter::TakeDamage(float DamageAmount, FDamageEvent
 	const float AppliedDamage = Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
 	const float FinalDamage = AppliedDamage > 0.0f ? AppliedDamage : FMath::Max(0.0f, DamageAmount);
 	Health = FMath::Clamp(Health - FinalDamage, 0.0f, MaxHealth);
+	if (Health < 1.0f)
+	{
+		Health = 0.0f;
+	}
 	if (FinalDamage > 0.0f)
 	{
 		ApplyDamageCameraKick(FinalDamage, DamageCauser);
@@ -281,6 +399,34 @@ void ASecondSemester_TeamCharacter::EnterDeathState()
 		PlayerController->SetIgnoreLookInput(true);
 		PlayerController->SetViewTargetWithBlend(this, 0.35f, VTBlend_Cubic);
 	}
+	ShowGameOverWidget();
+}
+
+void ASecondSemester_TeamCharacter::ShowGameOverWidget()
+{
+	APlayerController* PlayerController = Cast<APlayerController>(Controller);
+	if (!PlayerController || !PlayerController->IsLocalController())
+	{
+		return;
+	}
+
+	if (!GameOverWidget)
+	{
+		GameOverWidget = CreateWidget<UCSHGameOverWidget>(
+			PlayerController, UCSHGameOverWidget::StaticClass());
+	}
+	if (!GameOverWidget)
+	{
+		return;
+	}
+
+	GameOverWidget->AddToPlayerScreen(100);
+	FInputModeUIOnly InputMode;
+	InputMode.SetWidgetToFocus(GameOverWidget->TakeWidget());
+	InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+	PlayerController->SetInputMode(InputMode);
+	PlayerController->SetShowMouseCursor(true);
+	UGameplayStatics::SetGamePaused(this, true);
 }
 
 void ASecondSemester_TeamCharacter::Heal(float HealAmount)

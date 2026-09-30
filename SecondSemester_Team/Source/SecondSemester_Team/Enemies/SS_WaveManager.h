@@ -27,6 +27,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wave|UI", meta = (ClampMin = "0.0"))
 	float WaveStartDelay = 3.0f;
 
+	/** Health restored to the player after all enemies in a wave have been defeated. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wave|Reward", meta = (ClampMin = "0.0"))
+	float WaveCompletionHealAmount = 100.0f;
+
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Wave")
 	TArray<TObjectPtr<ASS_EnemySpawner>> EnemySpawners;
 
@@ -53,6 +57,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Wave")
 	void StartWave(int32 WaveIndex);
 
+	UFUNCTION(BlueprintCallable, Category = "Wave|UI")
+	void SetWaveUIVisible(bool bVisible);
+
 	/** Stops pending spawns; already spawned enemies are left alive. */
 	UFUNCTION(BlueprintCallable, Category = "Wave")
 	void StopWave();
@@ -78,6 +85,7 @@ private:
 	TObjectPtr<USS_WaveWidget> WaveWidget;
 	TArray<TWeakObjectPtr<AActor>> LivingEnemies;
 	bool bWaveActive = false;
+	bool bWaveUIVisible = true;
 	bool bIsWaveCountdownActive = false;
 	TArray<FSS_WaveEnemyEntry> PendingEntries;
 	int32 EntryIndex = 0;

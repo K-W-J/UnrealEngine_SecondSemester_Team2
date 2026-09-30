@@ -1,5 +1,6 @@
 #include "CSHTowedCar.h"
 #include "SecondSemester_TeamCharacter.h"
+#include "Enemies/SS_Enemy.h"
 #include "Components/PrimitiveComponent.h"
 #include "Components/SceneComponent.h"
 #include "Engine/World.h"
@@ -48,6 +49,10 @@ bool ACSHTowedCar::Capture(AActor* Car, USceneComponent* Mount, float Scale)
     AttachToComponent(Mount, FAttachmentTransformRules::SnapToTargetNotIncludingScale);
     Car->AttachToComponent(RootComponent, FAttachmentTransformRules::SnapToTargetNotIncludingScale);
     Car->SetActorRelativeScale3D(OriginalScale * Scale);
+	if (ASS_Enemy* Enemy = Cast<ASS_Enemy>(Car))
+	{
+		Enemy->MarkCapturedAsDefeated();
+	}
     return true;
 }
 
@@ -99,6 +104,13 @@ void ACSHTowedCar::Tick(float DeltaSeconds)
 void ACSHTowedCar::Release()
 {
     if (!IsValid(Target)) return;
+	if (const ASS_Enemy* Enemy = Cast<ASS_Enemy>(Target); Enemy && Enemy->bIsDead)
+	{
+		Target->DetachFromActor(FDetachmentTransformRules::KeepWorldTransform);
+		Target->Destroy();
+		Target = nullptr;
+		return;
+	}
     Target->DetachFromActor(FDetachmentTransformRules::KeepWorldTransform);
     Target->SetActorScale3D(OriginalScale);
     Target->SetActorEnableCollision(bCollision);

@@ -33,6 +33,29 @@ void ASecondSemester_TeamPlayerController::SetWeaponHUDInfo(const FText& Name, c
         MainUIWidget->SetWeaponInfo(Name, Description);
     }
 }
+
+void ASecondSemester_TeamPlayerController::SetGameplayHUDVisible(bool bVisible)
+{
+	bGameplayHUDVisible = bVisible;
+	const ESlateVisibility Visibility = bVisible
+		? ESlateVisibility::HitTestInvisible
+		: ESlateVisibility::Collapsed;
+	if (CrosshairWidget)
+	{
+		CrosshairWidget->SetVisibility(Visibility);
+	}
+	if (MainUIWidget)
+	{
+		MainUIWidget->SetVisibility(Visibility);
+	}
+	if (MobileControlsWidget)
+	{
+		MobileControlsWidget->SetVisibility(bVisible
+			? ESlateVisibility::Visible
+			: ESlateVisibility::Collapsed);
+	}
+}
+
 void ASecondSemester_TeamPlayerController::BeginPlay()
 {
 	Super::BeginPlay();
@@ -43,6 +66,8 @@ void ASecondSemester_TeamPlayerController::BeginPlay()
 		if (CrosshairWidget)
 		{
 			CrosshairWidget->AddToPlayerScreen(10);
+			CrosshairWidget->SetVisibility(bGameplayHUDVisible
+				? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
 		}
 
 		const TSoftClassPtr<UCSHMainUIWidget> MainUIClass(
@@ -53,6 +78,8 @@ void ASecondSemester_TeamPlayerController::BeginPlay()
 			if (MainUIWidget)
 			{
 				MainUIWidget->AddToPlayerScreen(9);
+				MainUIWidget->SetVisibility(bGameplayHUDVisible
+					? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
 			}
 		}
 	}
@@ -68,6 +95,8 @@ void ASecondSemester_TeamPlayerController::BeginPlay()
 		{
 			// add the controls to the player screen
 			MobileControlsWidget->AddToPlayerScreen(0);
+			MobileControlsWidget->SetVisibility(bGameplayHUDVisible
+				? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
 
 		} else {
 

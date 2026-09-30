@@ -3,8 +3,10 @@
 #include "Enemies/SS_Enemy.h"
 #include "Enemies/SS_EnemySpawner.h"
 #include "Enemies/SS_WaveWidget.h"
+#include "CSH/SecondSemester_TeamCharacter.h"
 #include "EngineUtils.h"
 #include "GameFramework/PlayerController.h"
+#include "Kismet/GameplayStatics.h"
 #include "TimerManager.h"
 
 ASS_WaveManager::ASS_WaveManager()
@@ -47,6 +49,17 @@ void ASS_WaveManager::CollectEnemySpawners()
 			(*It)->StopAutomaticSpawning();
 			EnemySpawners.Add(*It);
 		}
+	}
+}
+
+void ASS_WaveManager::SetWaveUIVisible(bool bVisible)
+{
+	bWaveUIVisible = bVisible;
+	if (WaveWidget)
+	{
+		WaveWidget->SetVisibility(bVisible
+			? ESlateVisibility::HitTestInvisible
+			: ESlateVisibility::Collapsed);
 	}
 }
 
@@ -135,6 +148,9 @@ void ASS_WaveManager::EnsureWaveWidget()
 		if (WaveWidget)
 		{
 			WaveWidget->AddToPlayerScreen(20);
+			WaveWidget->SetVisibility(bWaveUIVisible
+				? ESlateVisibility::HitTestInvisible
+				: ESlateVisibility::Collapsed);
 		}
 	}
 }
@@ -225,6 +241,14 @@ void ASS_WaveManager::CheckWaveCompleted()
 		return;
 	}
 	bWaveActive = false;
+	if (WaveCompletionHealAmount > 0.0f)
+	{
+		if (ASecondSemester_TeamCharacter* Player = Cast<ASecondSemester_TeamCharacter>(
+			UGameplayStatics::GetPlayerCharacter(this, 0)))
+		{
+			Player->Heal(WaveCompletionHealAmount);
+		}
+	}
 	// Defer advancement to avoid recursive StartWave calls for empty waves.
 	if (WaveData.IsValidIndex(CurrentWaveIndex + 1))
 	{

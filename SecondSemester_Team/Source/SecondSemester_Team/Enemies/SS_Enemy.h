@@ -70,6 +70,11 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Combat|Effects")
 	TObjectPtr<USoundBase> HitSound;
 
+	/** Prevents one player collision from producing several overlapping hit sounds. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Combat|Effects",
+		meta = (ClampMin = "0.0", Units = "s"))
+	float PlayerImpactSoundCooldown = 0.35f;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Combat|Effects")
 	TObjectPtr<UNiagaraSystem> ExplosionEffect;
 
@@ -78,6 +83,10 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "SS Enemy Combat")
 	void ApplyCarDamage(float Damage, FVector HitLocation);
+
+	/** Marks a skewered enemy defeated without removing its vehicle mesh immediately. */
+	UFUNCTION(BlueprintCallable, Category = "SS Enemy Combat")
+	void MarkCapturedAsDefeated();
 
 	virtual float TakeDamage(float DamageAmount, const FDamageEvent& DamageEvent,
 		AController* EventInstigator, AActor* DamageCauser) override;
@@ -99,7 +108,7 @@ public:
 
 	/** Desired planar speed while following the path. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Movement", meta = (ClampMin = "0.0"))
-	float FollowSpeed = 2000.0f;
+	float FollowSpeed = 1300.0f;
 
 	/** Natural planar drag. Lower values preserve more momentum while turning. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Movement|Physics", meta = (ClampMin = "0.0", DisplayName = "Linear Drag"))
@@ -153,6 +162,14 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Movement|Physics", meta = (ClampMin = "0.0"))
 	float PathLookAheadTime = 0.35f;
 
+	/** How quickly the physical drive force changes toward a new path direction. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Movement|Physics", meta = (ClampMin = "0.0"))
+	float SteeringResponseSpeed = 2.5f;
+
+	/** Distance along the path used as the steering target, preventing attraction to points directly under the car. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Movement|Physics", meta = (ClampMin = "0.0", Units = "cm"))
+	float PathSteeringLookAheadDistance = 700.0f;
+
 	/** Distance at which a navigation point is considered reached. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Movement", meta = (ClampMin = "1.0"))
 	float PathPointAcceptanceRadius = 110.0f;
@@ -163,7 +180,7 @@ public:
 
 	/** Within this planar distance, rush directly toward the player instead of following path points. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Movement|Charge", meta = (ClampMin = "0.0", Units = "cm"))
-	float DirectChargeRadius = 800.0f;
+	float DirectChargeRadius = 300.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Movement|Charge", meta = (ClampMin = "1.0"))
 	float DirectChargeForceMultiplier = 1.6f;
@@ -177,11 +194,11 @@ public:
 
 	/** How quickly the actor's forward direction aligns with its current movement direction. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Movement|Physics", meta = (ClampMin = "0.0", DisplayName = "Movement Facing Speed"))
-	float RotationInterpSpeed = 8.0f;
+	float RotationInterpSpeed = 3.5f;
 
 	/** Maximum turn rate toward the current movement direction in degrees per second. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Movement|Physics", meta = (ClampMin = "0.0"))
-	float MaxAngularSpeed = 240.0f;
+	float MaxAngularSpeed = 120.0f;
 
 	/** Draws the generated navigation points and the currently followed segment. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Movement")
@@ -224,6 +241,33 @@ public:
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "SS Enemy Movement|Navigation Recovery")
 	bool bReturningToNavigation = false;
 
+	/** Teleports the car to nearby navigation if it is trying to drive but remains stuck. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Movement|Stuck Recovery")
+	bool bEnableStuckTeleport = true;
+
+	/** Seconds the car may remain within StuckMovementTolerance before recovery. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Movement|Stuck Recovery",
+		meta = (ClampMin = "0.5", Units = "s"))
+	float StuckTeleportDelay = 5.0f;
+
+	/** Minimum planar movement that resets the stuck timer. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Movement|Stuck Recovery",
+		meta = (ClampMin = "1.0", Units = "cm"))
+	float StuckMovementTolerance = 150.0f;
+
+	/** Maximum radius searched for a safe NavMesh teleport destination. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Movement|Stuck Recovery",
+		meta = (ClampMin = "100.0", Units = "cm"))
+	float StuckTeleportSearchRadius = 4000.0f;
+
+	/** Prevents recovery from selecting almost the same blocked position. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Movement|Stuck Recovery",
+		meta = (ClampMin = "50.0", Units = "cm"))
+	float StuckTeleportMinimumDistance = 500.0f;
+
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "SS Enemy Movement|Stuck Recovery")
+	float StuckElapsedTime = 0.0f;
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
@@ -240,11 +284,15 @@ private:
 	FTimerHandle RandomSoundTimer;
 	void UpdateNavigationRecovery();
 	void ApplyNavigationRecoveryForce();
+	bool UpdateStuckTeleport(float DeltaTime);
+	bool TeleportToNearbyNavigation();
 	float NavigationRecoveryCheckTime = 0.0f;
+	FVector StuckReferenceLocation = FVector::ZeroVector;
 	UFUNCTION()
 	void HandleCarHit(AActor* SelfActor, AActor* OtherActor, FVector NormalImpulse, const FHitResult& Hit);
 	void ApplyCollisionDamage(FVector HitLocation, float ClosingSpeed);
 	double NextCollisionDamageTime = 0.0;
+	double NextPlayerImpactSoundTime = 0.0;
 	void RebuildNavigationPath();
 	void ApplyPathFollowingForce(float DeltaTime);
 	void ApplyStoppingForce();
@@ -257,4 +305,5 @@ private:
 	int32 CurrentPathPointIndex = INDEX_NONE;
 	float PathRecalculationTimeRemaining = 0.0f;
 	float StraightAccelerationAlpha = 0.0f;
+	FVector SmoothedDriveDirection = FVector::ZeroVector;
 };

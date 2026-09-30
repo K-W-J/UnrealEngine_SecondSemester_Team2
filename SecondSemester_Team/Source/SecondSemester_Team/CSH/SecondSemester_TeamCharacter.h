@@ -16,6 +16,9 @@ class UInputAction;
 class ACSHWeaponBase;
 class ASS_Enemy;
 class UCSHDamageBorderWidget;
+class UCSHGameOverWidget;
+class UCSHStartMenuWidget;
+class ACameraActor;
 struct FInputActionValue;
 
 DECLARE_LOG_CATEGORY_EXTERN(LogTemplateCharacter, Log, All);
@@ -75,6 +78,9 @@ public:
 
 	/** Launches the player away from an enemy car when the two collide. */
 	void ApplyEnemyCarImpact(ASS_Enemy* Enemy);
+
+	/** Returns from the title camera to the player camera. */
+	void FinishTitleScreen();
 
 	/** Horizontal launch speed produced by a car moving at EnemyImpactReferenceSpeed. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Player|Enemy Impact", meta=(ClampMin="0", Units="cm/s", DisplayName="Horizontal Launch at Reference Speed"))
@@ -170,6 +176,9 @@ protected:
 	void UpdateDamageCameraKick(float DeltaSeconds);
 	void UpdateDamageBorder(float DeltaSeconds);
 	void EnsureDamageBorderWidget();
+	void ShowGameOverWidget();
+	void ShowStartMenuWidget();
+	void SetGameplayUIVisible(bool bVisible);
 	void UpdateExplosionCameraShake(float DeltaSeconds);
 	void DebugTakeDamage();
 	void DebugHeal();
@@ -212,7 +221,7 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Player|Movement", meta=(ClampMin="0", Units="cm/s"))
 	float CSHWalkSpeed = 500.0f;
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Player|Movement", meta=(ClampMin="0", Units="cm/s"))
-	float CSHSprintSpeed = 850.0f;
+	float CSHSprintSpeed = 1100.0f;
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Player|Stamina", meta=(ClampMin="0"))
 	float StaminaDrainPerSecond = 25.0f;
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Player|Stamina", meta=(ClampMin="0"))
@@ -236,6 +245,31 @@ private:
 	float TimeSinceSprintStopped = 0.0f;
 	FRotator DamageCameraKick = FRotator::ZeroRotator;
 	bool bDeathStateEntered = false;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UCSHGameOverWidget> GameOverWidget;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Player|UI", meta=(AllowPrivateAccess="true"))
+	bool bShowStartMenuOnBeginPlay = true;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UCSHStartMenuWidget> StartMenuWidget;
+
+	bool bStartMenuPresented = false;
+
+	UPROPERTY(EditDefaultsOnly, Category="Player|UI|Title Camera")
+	FVector TitleCameraLocalOffset = FVector(-1200.0f, 650.0f, 450.0f);
+
+	UPROPERTY(EditDefaultsOnly, Category="Player|UI|Title Camera")
+	FVector TitleCameraFocusLocalOffset = FVector(450.0f, 0.0f, 100.0f);
+
+	UPROPERTY(EditDefaultsOnly, Category="Player|UI|Title Camera", meta=(ClampMin="0.0", Units="s"))
+	float TitleCameraBlendDuration = 0.75f;
+
+	UPROPERTY(Transient)
+	TObjectPtr<ACameraActor> ActiveTitleCamera;
+
+	bool bSpawnedRuntimeTitleCamera = false;
 	
 float ExplosionShakeRemaining = 0.0f;
 	

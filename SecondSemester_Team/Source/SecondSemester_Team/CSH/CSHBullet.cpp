@@ -14,7 +14,8 @@
 
 ACSHBullet::ACSHBullet()
 {
-    PrimaryActorTick.bCanEverTick = false;
+    PrimaryActorTick.bCanEverTick = true;
+    PrimaryActorTick.bStartWithTickEnabled = false;
     Collision = CreateDefaultSubobject<USphereComponent>(TEXT("Collision"));
     SetRootComponent(Collision);
     Collision->InitSphereRadius(2.0f);
@@ -59,11 +60,30 @@ void ACSHBullet::BeginPlay()
     ProjectileMovement->MaxSpeed = InitialSpeed;
     ProjectileMovement->ProjectileGravityScale = GravityScale;
     ProjectileMovement->Velocity = GetActorForwardVector() * InitialSpeed;
+    if (!SpinRate.IsNearlyZero())
+    {
+        ProjectileMovement->bRotationFollowsVelocity = false;
+        SetActorTickEnabled(true);
+        // Velocity was initialized first, so random orientation does not change the aim.
+        SetActorRotation(FRotator(FMath::FRandRange(-180.f, 180.f),
+            FMath::FRandRange(-180.f, 180.f), FMath::FRandRange(-180.f, 180.f)));
+    }
     Collision->IgnoreActorWhenMoving(GetOwner(), true);
     Collision->IgnoreActorWhenMoving(GetInstigator(), true);
     BulletMesh->SetVisibility(true, true);
     BulletMesh->SetHiddenInGame(false, true);
     if (bHoming) AcquireHomingTarget();
+}
+
+void ACSHBullet::Tick(float DeltaSeconds)
+{
+    Super::Tick(DeltaSeconds);
+    if (!ProjectileMovement->UpdatedComponent || ProjectileMovement->Velocity.IsNearlyZero())
+    {
+        SetActorTickEnabled(false);
+        return;
+    }
+    AddActorLocalRotation(SpinRate * DeltaSeconds);
 }
 
 void ACSHBullet::AcquireHomingTarget()
@@ -89,6 +109,13 @@ void ACSHBullet::OnBulletHit(UPrimitiveComponent*, AActor* OtherActor, UPrimitiv
     FVector, const FHitResult& Hit)
 {
     if (!IsValid(OtherActor) || OtherActor == this || OtherActor == GetOwner() || OtherActor == GetInstigator()) return;
+    // Physical projectiles remain until their lifespan expires. Damage each target only once.
+    const bool bBounceOnImpact = ProjectileMovement->bShouldBounce && !bExplosive;
+    if (bBounceOnImpact)
+    {
+        if (BounceDamagedActors.Contains(OtherActor)) return;
+        BounceDamagedActors.Add(OtherActor);
+    }
     if (bSpawnImpactExplosion)
     {
         if (ImpactExplosionEffect)
@@ -110,12 +137,12 @@ void ACSHBullet::OnBulletHit(UPrimitiveComponent*, AActor* OtherActor, UPrimitiv
     }
     else
     {
-        UGameplayStatics::ApplyPointDamage(OtherActor, Damage, GetActorForwardVector(), Hit,
+        UGameplayStatics::ApplyPointDamage(OtherActor, Damage, ProjectileMovement->Velocity.GetSafeNormal(), Hit,
             GetInstigatorController(), this, UDamageType::StaticClass());
     }
     if (KnockbackImpulse > 0.f && OtherComponent)
     {
-        const FVector Impulse = GetActorForwardVector() * KnockbackImpulse;
+        const FVector Impulse = ProjectileMovement->Velocity.GetSafeNormal() * KnockbackImpulse;
         if (OtherComponent->IsSimulatingPhysics()) OtherComponent->AddImpulseAtLocation(Impulse, Hit.ImpactPoint);
         if (ACharacter* Character = Cast<ACharacter>(OtherActor)) Character->LaunchCharacter(Impulse, true, true);
     }
@@ -124,5 +151,5 @@ void ACSHBullet::OnBulletHit(UPrimitiveComponent*, AActor* OtherActor, UPrimitiv
         Collision->IgnoreActorWhenMoving(OtherActor, true);
         return;
     }
-    Destroy();
+    if (!bBounceOnImpact) Destroy();
 }
