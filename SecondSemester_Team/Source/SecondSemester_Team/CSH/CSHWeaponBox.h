@@ -12,6 +12,7 @@ class SECONDSEMESTER_TEAM_API ACSHWeaponBox : public AActor
     GENERATED_BODY()
 public:
     ACSHWeaponBox();
+    bool IsAvailableForPickup() const { return !bPickupConsumed && !IsActorBeingDestroyed(); }
 protected:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components") UBoxComponent* PickupTrigger;
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components") UStaticMeshComponent* BoxMesh;

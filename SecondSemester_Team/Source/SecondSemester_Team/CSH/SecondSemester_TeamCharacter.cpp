@@ -15,6 +15,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "SecondSemester_Team.h"
 #include "CSHWeaponBase.h"
+#include "CSHFists.h"
 #include "InputCoreTypes.h"
 #include "Enemies/SS_Enemy.h"
 #include "CSHDamageBorderWidget.h"
@@ -106,6 +107,11 @@ void ASecondSemester_TeamCharacter::BeginPlay()
     FirstPersonCameraComponent->Activate();
     UpdateBodyVisibility(true);
 	EnsureDamageBorderWidget();
+    if (!IsValid(CurrentWeapon))
+    {
+        UClass* FistsClass=LoadClass<ACSHFists>(nullptr,TEXT("/Game/CSH/Buleprint/Weapons/Fists/BP_CSH_Fists.BP_CSH_Fists_C"));
+        EquipWeapon(FistsClass ? FistsClass : ACSHFists::StaticClass());
+    }
 }
 
 void ASecondSemester_TeamCharacter::EnsureDamageBorderWidget()
