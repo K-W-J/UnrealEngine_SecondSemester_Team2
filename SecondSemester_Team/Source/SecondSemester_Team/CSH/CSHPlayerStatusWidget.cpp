@@ -47,7 +47,9 @@ TSharedRef<SWidget> UCSHPlayerStatusWidget::RebuildWidget()
                         .Text_Lambda([GetCharacter]()
                         {
                             const auto* Character = GetCharacter();
-                            return FText::FromString(FString::Printf(TEXT("%.0f / %.0f"), Character ? Character->GetHealth() : 0.0f, Character ? Character->GetMaxHealth() : 100.0f));
+                            return FText::FromString(FString::Printf(TEXT("%.0f / %.0f"),
+                                Character ? FMath::CeilToFloat(Character->GetHealth()) : 0.0f,
+                                Character ? Character->GetMaxHealth() : 100.0f));
                         })
                         .Font(FCoreStyle::GetDefaultFontStyle("Bold", 12))
                         .ColorAndOpacity(FSlateColor(HealthColor))

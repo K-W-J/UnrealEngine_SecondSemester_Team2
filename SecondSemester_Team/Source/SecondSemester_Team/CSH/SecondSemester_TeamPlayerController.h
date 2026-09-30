@@ -31,6 +31,10 @@ public:
 	void SetWeaponHUDVisible(bool bVisible);
 	void SetWeaponHUDInfo(const FText& Name, const FText& Description);
 
+	/** Shows or hides every in-game HUD element while retaining the widgets. */
+	UFUNCTION(BlueprintCallable, Category="CSH|UI")
+	void SetGameplayHUDVisible(bool bVisible);
+
 protected:
 
 	/** Input Mapping Contexts */
@@ -60,6 +64,8 @@ protected:
 	/** If true, the player will use UMG touch controls even if not playing on mobile platforms */
 	UPROPERTY(EditAnywhere, Config, Category = "Input|Touch Controls")
 	bool bForceTouchControls = false;
+
+	bool bGameplayHUDVisible = true;
 
 	/** Gameplay initialization */
 	virtual void BeginPlay() override;

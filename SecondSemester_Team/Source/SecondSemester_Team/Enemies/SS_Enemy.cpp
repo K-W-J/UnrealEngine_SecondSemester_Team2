@@ -1,5 +1,7 @@
 #include "Enemies/SS_Enemy.h"
 
+#include "Enemies/SS_WaveManager.h"
+
 #include "DrawDebugHelpers.h"
 #include "Components/BoxComponent.h"
 #include "Components/CapsuleComponent.h"
@@ -14,6 +16,7 @@
 #include "Components/AudioComponent.h"
 #include "TimerManager.h"
 #include "Engine/DamageEvents.h"
+#include "EngineUtils.h"
 #include "CSH/SecondSemester_TeamCharacter.h"
 
 ASS_Enemy::ASS_Enemy()
@@ -42,6 +45,8 @@ void ASS_Enemy::BeginPlay()
 	Super::BeginPlay();
 	CurrentHealth = FMath::Max(MaxHealth, 1.0f);
 	bIsDead = false;
+	StuckReferenceLocation = GetActorLocation();
+	StuckElapsedTime = 0.0f;
 	ScheduleRandomSound();
 	OnActorHit.AddUniqueDynamic(this, &ASS_Enemy::HandleCarHit);
 	GetCapsuleComponent()->SetNotifyRigidBodyCollision(true);
@@ -184,6 +189,10 @@ void ASS_Enemy::Tick(float DeltaTime)
 			return;
 		}
 	}
+	if (UpdateStuckTeleport(DeltaTime))
+	{
+		return;
+	}
 
 	const bool bPlayerWithinChargeRange = DirectChargeRadius > 0.0f
 		&& FVector::DistSquared2D(GetActorLocation(), FollowTarget->GetActorLocation())
@@ -200,6 +209,158 @@ void ASS_Enemy::Tick(float DeltaTime)
 	}
 
 	ApplyPathFollowingForce(DeltaTime);
+}
+
+bool ASS_Enemy::UpdateStuckTeleport(float DeltaTime)
+{
+	if (!bEnableStuckTeleport || !IsValid(FollowTarget))
+	{
+		StuckElapsedTime = 0.0f;
+		StuckReferenceLocation = GetActorLocation();
+		return false;
+	}
+
+	const bool bTargetIsFarEnough = FVector::DistSquared2D(
+		GetActorLocation(), FollowTarget->GetActorLocation()) >
+		FMath::Square(TargetAcceptanceRadius + StuckMovementTolerance);
+	// Count every distant target as driving intent. Requiring a valid path here would
+	// exclude exactly the failure case this recovery handles: path generation failed
+	// while the car is wedged against geometry.
+	const bool bTryingToDrive = bTargetIsFarEnough
+		&& FollowSpeed > UE_SMALL_NUMBER && MaxMovementForce > UE_SMALL_NUMBER;
+	if (!bTryingToDrive)
+	{
+		StuckElapsedTime = 0.0f;
+		StuckReferenceLocation = GetActorLocation();
+		return false;
+	}
+
+	if (FVector::DistSquared2D(GetActorLocation(), StuckReferenceLocation) >=
+		FMath::Square(FMath::Max(StuckMovementTolerance, 1.0f)))
+	{
+		StuckElapsedTime = 0.0f;
+		StuckReferenceLocation = GetActorLocation();
+		return false;
+	}
+
+	StuckElapsedTime += DeltaTime;
+	if (StuckElapsedTime < FMath::Max(StuckTeleportDelay, 0.5f))
+	{
+		return false;
+	}
+
+	if (!TeleportToNearbyNavigation())
+	{
+		// Retry soon, without running the expensive NavMesh search every frame.
+		StuckElapsedTime = FMath::Max(StuckTeleportDelay - 1.0f, 0.0f);
+		return false;
+	}
+
+	StuckElapsedTime = 0.0f;
+	StuckReferenceLocation = GetActorLocation();
+	NavigationPoints.Reset();
+	CurrentPathPointIndex = INDEX_NONE;
+	bHasValidNavigationPath = false;
+	PathRecalculationTimeRemaining = 0.0f;
+	StraightAccelerationAlpha = 0.0f;
+	SmoothedDriveDirection = FVector::ZeroVector;
+	RebuildNavigationPath();
+	return true;
+}
+
+bool ASS_Enemy::TeleportToNearbyNavigation()
+{
+	UWorld* World = GetWorld();
+	UNavigationSystemV1* NavSystem = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+	UCharacterMovementComponent* Movement = GetCharacterMovement();
+	UCapsuleComponent* Capsule = GetCapsuleComponent();
+	if (!World || !NavSystem || !Movement || !Capsule)
+	{
+		return false;
+	}
+
+	const ANavigationData* NavData = NavSystem->GetNavDataForProps(Movement->NavAgentProps);
+	if (!NavData)
+	{
+		NavData = NavSystem->GetDefaultNavDataInstance(FNavigationSystem::DontCreate);
+	}
+	if (!NavData)
+	{
+		return false;
+	}
+
+	const FVector Origin = GetActorLocation();
+	FVector PreferredDirection = IsValid(FollowTarget)
+		? FollowTarget->GetActorLocation() - Origin
+		: GetActorForwardVector();
+	PreferredDirection.Z = 0.0f;
+	if (!PreferredDirection.Normalize())
+	{
+		PreferredDirection = GetActorForwardVector().GetSafeNormal2D();
+	}
+
+	const float MinimumDistance = FMath::Max(StuckTeleportMinimumDistance, 50.0f);
+	const float SearchRadius = FMath::Max(StuckTeleportSearchRadius, MinimumDistance);
+	const FVector ProjectionExtent(
+		FMath::Max(NavigationAgentRadius, 100.0f),
+		FMath::Max(NavigationAgentRadius, 100.0f),
+		FMath::Max(NavigationAgentHeight, 300.0f));
+	const float CapsuleHalfHeight = Capsule->GetScaledCapsuleHalfHeight();
+	const FRotator UprightRotation(0.0f, GetActorRotation().Yaw, 0.0f);
+	constexpr int32 RingCount = 4;
+	constexpr int32 DirectionCount = 12;
+
+	for (int32 RingIndex = 0; RingIndex < RingCount; ++RingIndex)
+	{
+		const float RingAlpha = RingCount > 1
+			? static_cast<float>(RingIndex) / static_cast<float>(RingCount - 1)
+			: 1.0f;
+		const float ProbeDistance = FMath::Lerp(MinimumDistance, SearchRadius, RingAlpha);
+		for (int32 DirectionIndex = 0; DirectionIndex < DirectionCount; ++DirectionIndex)
+		{
+			const float Angle = 360.0f * static_cast<float>(DirectionIndex) /
+				static_cast<float>(DirectionCount);
+			const FVector ProbeDirection = PreferredDirection.RotateAngleAxis(Angle, FVector::UpVector);
+			const FVector ProbeLocation = Origin + ProbeDirection * ProbeDistance;
+			FNavLocation ProjectedPoint;
+			if (!NavSystem->ProjectPointToNavigation(
+				ProbeLocation, ProjectedPoint, ProjectionExtent, NavData))
+			{
+				continue;
+			}
+			if (FVector::DistSquared2D(Origin, ProjectedPoint.Location) <
+				FMath::Square(MinimumDistance * 0.75f))
+			{
+				continue;
+			}
+
+			const FVector Destination = ProjectedPoint.Location +
+				FVector::UpVector * (CapsuleHalfHeight + 5.0f);
+			if (!TeleportTo(Destination, UprightRotation, false, false))
+			{
+				continue;
+			}
+
+			if (Capsule->IsSimulatingPhysics())
+			{
+				Capsule->SetPhysicsLinearVelocity(FVector::ZeroVector);
+				Capsule->SetPhysicsAngularVelocityInRadians(FVector::ZeroVector);
+				Capsule->WakeAllRigidBodies();
+			}
+			else
+			{
+				Movement->StopMovementImmediately();
+			}
+			if (bDrawDebugPath)
+			{
+				DrawDebugSphere(World, Destination, 60.0f, 16, FColor::Cyan, false, 5.0f, 0, 4.0f);
+				DrawDebugLine(World, Origin, Destination, FColor::Cyan, false, 5.0f, 0, 4.0f);
+			}
+			return true;
+		}
+	}
+
+	return false;
 }
 
 void ASS_Enemy::UpdateNavigationRecovery()
@@ -265,6 +426,32 @@ void ASS_Enemy::HandleCarHit(AActor* SelfActor, AActor* OtherActor, FVector Norm
 {
 	if (ASecondSemester_TeamCharacter* Player = Cast<ASecondSemester_TeamCharacter>(OtherActor))
 	{
+		FVector ToPlayer = Player->GetActorLocation() - GetActorLocation();
+		ToPlayer.Z = 0.0f;
+		if (!ToPlayer.Normalize())
+		{
+			ToPlayer = GetRecentDriveVelocity().GetSafeNormal2D();
+		}
+		const FVector PlayerVelocity = Player->GetVelocity();
+		const float CurrentClosingSpeed = FVector::DotProduct(
+			GetVelocity() - PlayerVelocity, ToPlayer);
+		const float RecentClosingSpeed = FVector::DotProduct(
+			GetRecentDriveVelocity() - PlayerVelocity, ToPlayer);
+		const float ClosingSpeed = FMath::Max(0.0f,
+			FMath::Max(CurrentClosingSpeed, RecentClosingSpeed));
+		if (!bIsDead && HitSound && GetWorld()
+			&& ClosingSpeed >= MinimumCollisionDamageSpeed)
+		{
+			const double Now = GetWorld()->GetTimeSeconds();
+			if (Now >= NextPlayerImpactSoundTime)
+			{
+				NextPlayerImpactSoundTime = Now + FMath::Max(PlayerImpactSoundCooldown, 0.0f);
+				const FVector SoundLocation = Hit.bBlockingHit
+					? FVector(Hit.ImpactPoint)
+					: Player->GetActorLocation();
+				UGameplayStatics::PlaySoundAtLocation(this, HitSound, SoundLocation);
+			}
+		}
 		Player->ApplyEnemyCarImpact(this);
 		return;
 	}
@@ -386,6 +573,35 @@ void ASS_Enemy::ApplyCarDamage(float Damage, FVector HitLocation)
 	Destroy();
 }
 
+void ASS_Enemy::MarkCapturedAsDefeated()
+{
+	if (bIsDead || IsActorBeingDestroyed())
+	{
+		return;
+	}
+
+	CurrentHealth = 0.0f;
+	bIsDead = true;
+	SetCanBeDamaged(false);
+	SetActorTickEnabled(false);
+	GetWorldTimerManager().ClearTimer(RandomSoundTimer);
+	if (RandomSoundComponent)
+	{
+		RandomSoundComponent->Stop();
+	}
+
+	if (UWorld* World = GetWorld())
+	{
+		for (TActorIterator<ASS_WaveManager> It(World); It; ++It)
+		{
+			if (IsValid(*It))
+			{
+				It->NotifyEnemyDied(this);
+			}
+		}
+	}
+}
+
 void ASS_Enemy::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
 	Super::SetupPlayerInputComponent(PlayerInputComponent);
@@ -401,6 +617,7 @@ void ASS_Enemy::SetFollowTarget(AActor* NewTarget)
 	CurrentPathPointIndex = INDEX_NONE;
 	bHasValidNavigationPath = false;
 	StraightAccelerationAlpha = 0.0f;
+	SmoothedDriveDirection = FVector::ZeroVector;
 }
 
 void ASS_Enemy::RebuildNavigationPath()
@@ -533,8 +750,33 @@ void ASS_Enemy::ApplyPathFollowingForce(float DeltaTime)
 		return;
 	}
 
-	const FVector SteeringTarget = bDirectlyFollowingOffNavTarget
-		? FollowTarget->GetActorLocation() : NavigationPoints[CurrentPathPointIndex];
+	FVector SteeringTarget = FollowTarget->GetActorLocation();
+	if (!bDirectlyFollowingOffNavTarget)
+	{
+		// Pure-pursuit style steering: aim farther along the path instead of being pulled
+		// toward the first point, which is usually generated immediately in front of the car.
+		SteeringTarget = NavigationPoints[CurrentPathPointIndex];
+		float RemainingLookAhead = FMath::Max(PathSteeringLookAheadDistance, 0.0f);
+		FVector SegmentStart = ActorLocation;
+		SegmentStart.Z = SteeringTarget.Z;
+		for (int32 PointIndex = CurrentPathPointIndex;
+			PointIndex < NavigationPoints.Num() && RemainingLookAhead > UE_SMALL_NUMBER;
+			++PointIndex)
+		{
+			const FVector SegmentEnd = NavigationPoints[PointIndex];
+			const float SegmentLength = FVector::Dist2D(SegmentStart, SegmentEnd);
+			if (SegmentLength >= RemainingLookAhead && SegmentLength > UE_SMALL_NUMBER)
+			{
+				const float SegmentAlpha = RemainingLookAhead / SegmentLength;
+				SteeringTarget = FMath::Lerp(SegmentStart, SegmentEnd, SegmentAlpha);
+				break;
+			}
+
+			SteeringTarget = SegmentEnd;
+			RemainingLookAhead -= SegmentLength;
+			SegmentStart = SegmentEnd;
+		}
+	}
 	if (bDrawDebugPath)
 	{
 		DrawDebugLine(GetWorld(), ActorLocation, SteeringTarget,
@@ -546,6 +788,24 @@ void ASS_Enemy::ApplyPathFollowingForce(float DeltaTime)
 	if (!Direction.Normalize())
 	{
 		return;
+	}
+	if (SmoothedDriveDirection.IsNearlyZero())
+	{
+		SmoothedDriveDirection = Direction;
+	}
+	else if (SteeringResponseSpeed > 0.0f)
+	{
+		const FVector BlendedDirection = FMath::VInterpTo(
+			SmoothedDriveDirection, Direction, DeltaTime, SteeringResponseSpeed);
+		SmoothedDriveDirection = BlendedDirection.GetSafeNormal2D();
+	}
+	else
+	{
+		SmoothedDriveDirection = Direction;
+	}
+	if (!SmoothedDriveDirection.IsNearlyZero())
+	{
+		Direction = SmoothedDriveDirection;
 	}
 
 	const float ForwardSpeed = FVector::DotProduct(CurrentPlanarVelocity, Direction);
