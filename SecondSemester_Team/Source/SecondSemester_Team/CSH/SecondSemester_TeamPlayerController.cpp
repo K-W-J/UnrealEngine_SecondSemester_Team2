@@ -44,6 +44,14 @@ void ASecondSemester_TeamPlayerController::SetSpecialWeaponHint(const FText& Hin
 	}
 }
 
+void ASecondSemester_TeamPlayerController::ShowTemporaryMessage(const FText& Message, float Duration)
+{
+	if (MainUIWidget)
+	{
+		MainUIWidget->ShowTemporaryMessage(Message, Duration);
+	}
+}
+
 void ASecondSemester_TeamPlayerController::AddWeaponBoxPoints(int32 Amount)
 {
 	if (Amount <= 0)

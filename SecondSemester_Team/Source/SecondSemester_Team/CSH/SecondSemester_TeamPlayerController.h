@@ -31,6 +31,7 @@ public:
 	void SetWeaponHUDVisible(bool bVisible);
 	void SetWeaponHUDInfo(const FText& Name, const FText& Description);
 	void SetSpecialWeaponHint(const FText& Hint, bool bVisible);
+	void ShowTemporaryMessage(const FText& Message, float Duration = 3.0f);
 
 	UFUNCTION(BlueprintCallable, Category="CSH|Point")
 	void AddWeaponBoxPoints(int32 Amount = 1);

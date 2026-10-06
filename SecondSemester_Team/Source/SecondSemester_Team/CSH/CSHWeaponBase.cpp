@@ -148,6 +148,11 @@ void ACSHWeaponBase::FireOnce()
     CharacterOwner->AddControllerPitchInput(-CameraPitchKick);
     CharacterOwner->AddControllerYawInput(FMath::FRandRange(-CameraYawKick, CameraYawKick));
     BP_OnFired();
+    if (!bInfiniteAmmo && CurrentAmmo <= 0 && ReserveAmmo <= 0)
+    {
+        StopFiring();
+        CharacterOwner->HandleWeaponAmmoDepleted(this);
+    }
 }
 
 

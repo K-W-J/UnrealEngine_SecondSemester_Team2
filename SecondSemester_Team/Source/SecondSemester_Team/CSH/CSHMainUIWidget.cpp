@@ -49,6 +49,25 @@ TSharedRef<SWidget> UCSHMainUIWidget::RebuildWidget()
             SpecialWeaponHintText->TakeWidget()
         ];
 
+    TemporaryMessageText = NewObject<UTextBlock>(this, TEXT("TemporaryMessageText"));
+    TemporaryMessageText->SetJustification(ETextJustify::Center);
+    TemporaryMessageText->SetColorAndOpacity(
+        FSlateColor(FLinearColor(1.0f, 0.32f, 0.12f, 1.0f)));
+    TemporaryMessageText->SetShadowOffset(FVector2D(2.0f, 3.0f));
+    TemporaryMessageText->SetShadowColorAndOpacity(FLinearColor::Black);
+    TemporaryMessageText->SetAutoWrapText(true);
+    FSlateFontInfo MessageFont = TemporaryMessageText->GetFont();
+    MessageFont.Size = 32;
+    TemporaryMessageText->SetFont(MessageFont);
+    TemporaryMessageText->SetVisibility(ESlateVisibility::Collapsed);
+    RootOverlay->AddSlot()
+        .HAlign(HAlign_Center)
+        .VAlign(VAlign_Bottom)
+        .Padding(FMargin(0.0f, 0.0f, 0.0f, 88.0f))
+        [
+            TemporaryMessageText->TakeWidget()
+        ];
+
     const TSoftClassPtr<UUserWidget> WeaponUIClass(
         FSoftObjectPath(TEXT("/Game/CSH/Buleprint/UI/WBP_CSH_WeaponUI.WBP_CSH_WeaponUI_C")));
 
@@ -144,4 +163,36 @@ void UCSHMainUIWidget::SetSpecialWeaponHint(const FText& Hint, bool bVisible)
     SpecialWeaponHintText->SetText(Hint);
     SpecialWeaponHintText->SetVisibility(
         bVisible ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+}
+
+void UCSHMainUIWidget::ShowTemporaryMessage(const FText& Message, float Duration)
+{
+    if (!TemporaryMessageText)
+    {
+        return;
+    }
+
+    MessageDuration = FMath::Max(Duration, 0.1f);
+    MessageTimeRemaining = MessageDuration;
+    TemporaryMessageText->SetText(Message);
+    TemporaryMessageText->SetRenderOpacity(1.0f);
+    TemporaryMessageText->SetVisibility(ESlateVisibility::HitTestInvisible);
+}
+
+void UCSHMainUIWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
+{
+    Super::NativeTick(MyGeometry, InDeltaTime);
+    if (!TemporaryMessageText || MessageTimeRemaining <= 0.0f)
+    {
+        return;
+    }
+
+    MessageTimeRemaining = FMath::Max(0.0f, MessageTimeRemaining - InDeltaTime);
+    const float FadeTime = FMath::Min(1.0f, MessageDuration);
+    TemporaryMessageText->SetRenderOpacity(
+        FMath::Clamp(MessageTimeRemaining / FadeTime, 0.0f, 1.0f));
+    if (MessageTimeRemaining <= 0.0f)
+    {
+        TemporaryMessageText->SetVisibility(ESlateVisibility::Collapsed);
+    }
 }

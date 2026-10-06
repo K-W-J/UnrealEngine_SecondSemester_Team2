@@ -19,6 +19,7 @@ class ASS_Enemy;
 class UCSHDamageBorderWidget;
 class UCSHGameOverWidget;
 class UCSHStartMenuWidget;
+class UCSHPauseMenuWidget;
 class ACameraActor;
 class ASS_WaveManager;
 class USoundBase;
@@ -73,6 +74,8 @@ public:
 	void ApplyEnemyCarImpact(ASS_Enemy* Enemy);
 
 	void FinishTitleScreen();
+	void ResumeFromPauseMenu();
+	void HandleWeaponAmmoDepleted(ACSHWeaponBase* DepletedWeapon);
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Player|Enemy Impact", meta=(ClampMin="0", Units="cm/s", DisplayName="Horizontal Launch at Reference Speed"))
 	float EnemyImpactHorizontalSpeed = 1100.0f;
@@ -179,6 +182,7 @@ protected:
 	void EnsureDamageBorderWidget();
 	void ShowGameOverWidget();
 	void ShowStartMenuWidget();
+	void TogglePauseMenu();
 	void SetGameplayUIVisible(bool bVisible);
 	void UpdateExplosionCameraShake(float DeltaSeconds);
 	void DebugTakeDamage();
@@ -256,6 +260,9 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UCSHGameOverWidget> GameOverWidget;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UCSHPauseMenuWidget> PauseMenuWidget;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Player|UI", meta=(AllowPrivateAccess="true"))
 	bool bShowStartMenuOnBeginPlay = true;

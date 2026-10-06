@@ -25,6 +25,7 @@
 #include "CSHDamageBorderWidget.h"
 #include "CSHGameOverWidget.h"
 #include "CSHStartMenuWidget.h"
+#include "CSHPauseMenuWidget.h"
 #include "Blueprint/UserWidget.h"
 #include "Sound/SoundBase.h"
 #include "UObject/ConstructorHelpers.h"
@@ -256,6 +257,60 @@ void ASecondSemester_TeamCharacter::FinishTitleScreen()
 	}
 	bSpawnedRuntimeTitleCamera = false;
 	ActiveTitleCamera = nullptr;
+}
+
+void ASecondSemester_TeamCharacter::TogglePauseMenu()
+{
+	if (bDeathStateEntered || (StartMenuWidget && StartMenuWidget->IsInViewport()))
+	{
+		return;
+	}
+	if (PauseMenuWidget && PauseMenuWidget->IsInViewport())
+	{
+		ResumeFromPauseMenu();
+		return;
+	}
+
+	APlayerController* PlayerController = Cast<APlayerController>(Controller);
+	if (!PlayerController || !PlayerController->IsLocalController())
+	{
+		return;
+	}
+	if (!PauseMenuWidget)
+	{
+		PauseMenuWidget = CreateWidget<UCSHPauseMenuWidget>(
+			PlayerController, UCSHPauseMenuWidget::StaticClass());
+	}
+	if (!PauseMenuWidget)
+	{
+		return;
+	}
+
+	StopWeaponFire();
+	StopSprint();
+	SetGameplayUIVisible(false);
+	PauseMenuWidget->AddToPlayerScreen(150);
+	FInputModeGameAndUI InputMode;
+	InputMode.SetWidgetToFocus(PauseMenuWidget->TakeWidget());
+	InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+	PlayerController->SetInputMode(InputMode);
+	PlayerController->SetShowMouseCursor(true);
+	UGameplayStatics::SetGamePaused(this, true);
+}
+
+void ASecondSemester_TeamCharacter::ResumeFromPauseMenu()
+{
+	if (PauseMenuWidget)
+	{
+		PauseMenuWidget->RemoveFromParent();
+	}
+	UGameplayStatics::SetGamePaused(this, false);
+	SetGameplayUIVisible(true);
+	if (APlayerController* PlayerController = Cast<APlayerController>(Controller))
+	{
+		PlayerController->SetInputMode(FInputModeGameOnly());
+		PlayerController->SetShowMouseCursor(false);
+	}
 }
 
 void ASecondSemester_TeamCharacter::SetGameplayUIVisible(bool bVisible)
@@ -667,6 +722,9 @@ void ASecondSemester_TeamCharacter::SetupPlayerInputComponent(UInputComponent* P
 	PlayerInputComponent->BindKey(EKeys::NumPadNine, IE_Pressed, this, &ASecondSemester_TeamCharacter::CheatKillAllEnemies);
 	PlayerInputComponent->BindKey(EKeys::Zero, IE_Pressed, this, &ASecondSemester_TeamCharacter::CheatEquipRandomWeapon);
 	PlayerInputComponent->BindKey(EKeys::NumPadZero, IE_Pressed, this, &ASecondSemester_TeamCharacter::CheatEquipRandomWeapon);
+	FInputKeyBinding& PauseBinding = PlayerInputComponent->BindKey(
+		EKeys::Escape, IE_Pressed, this, &ASecondSemester_TeamCharacter::TogglePauseMenu);
+	PauseBinding.bExecuteWhenPaused = true;
 
 	// Set up action bindings
 	if (UEnhancedInputComponent* EnhancedInputComponent = Cast<UEnhancedInputComponent>(PlayerInputComponent))
@@ -834,5 +892,25 @@ bool ASecondSemester_TeamCharacter::EquipUnarmedWeapon()
 		return EquipWeapon(UnarmedWeaponClass);
 	}
 	return EquipWeapon(ACSHFists::StaticClass());
+}
+
+void ASecondSemester_TeamCharacter::HandleWeaponAmmoDepleted(ACSHWeaponBase* DepletedWeapon)
+{
+	if (!IsValid(DepletedWeapon) || CurrentWeapon != DepletedWeapon || bDeathStateEntered)
+	{
+		return;
+	}
+
+	DepletedWeapon->StopFiring();
+	CurrentWeapon = nullptr;
+	DepletedWeapon->Destroy();
+	EquipUnarmedWeapon();
+
+	if (ASecondSemester_TeamPlayerController* PlayerController =
+		Cast<ASecondSemester_TeamPlayerController>(Controller))
+	{
+		PlayerController->ShowTemporaryMessage(
+			FText::FromString(TEXT("탄약을 모두 소진하여 맨주먹으로 전환했습니다")), 3.2f);
+	}
 }
 
