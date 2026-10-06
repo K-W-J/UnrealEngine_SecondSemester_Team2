@@ -17,10 +17,8 @@ public:
     void SetWeaponUIVisible(bool bVisible);
     void SetWeaponInfo(const FText& Name, const FText& Description);
 
-    /** Updates the weapon-box point counter in the upper-left corner. */
     void SetPointCount(int32 NewPointCount);
 
-    /** Shows a large control hint near the bottom centre of the screen. */
     void SetSpecialWeaponHint(const FText& Hint, bool bVisible);
 
 protected:

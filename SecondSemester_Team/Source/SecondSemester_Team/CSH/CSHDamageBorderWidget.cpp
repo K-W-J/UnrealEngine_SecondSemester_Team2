@@ -17,7 +17,6 @@ TSharedRef<SWidget> UCSHDamageBorderWidget::RebuildWidget()
 	WidgetTree->RootWidget = Canvas;
 	SetVisibility(ESlateVisibility::HitTestInvisible);
 
-	// Three translucent bands on each edge soften the screen border.
 	const float Thicknesses[] = {10.0f, 20.0f, 36.0f};
 	const float Offsets[] = {0.0f, 10.0f, 30.0f};
 	for (int32 Band = 0; Band < 3; ++Band)

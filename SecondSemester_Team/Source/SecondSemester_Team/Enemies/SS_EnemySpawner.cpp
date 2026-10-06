@@ -25,7 +25,6 @@ void ASS_EnemySpawner::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// Check before the immediate spawn, independent of actor BeginPlay ordering.
 	for (TActorIterator<ASS_WaveManager> It(GetWorld()); It; ++It)
 	{
 		if (IsValid(*It))

@@ -42,7 +42,6 @@ public:
             Boxes.Reset();
             for (TActorIterator<ACSHWeaponBox> It(Owner->GetWorld()); It; ++It)
                 if (It->IsAvailableForPickup()) Boxes.Add(*It);
-            // Tag eligibility only. Detection and target drawing run in BP_InvisibleRadar.
             for (TActorIterator<ASS_Enemy> It(Owner->GetWorld()); It; ++It)
             {
                 if (!It->bIsDead && !It->ActorHasTag(TEXT("CSH_Towed"))) It->Tags.AddUnique(TEXT("CSHRadarEnemy"));
@@ -53,7 +52,6 @@ public:
         const APawn* Player=Owner->GetOwningPlayerPawn();
         if (Player && Owner->bShowWalls)
         {
-            // Sample a horizontal collision slice in small batches, not the whole map each frame.
             if (ScanIndex == 0)
             {
                 ScanOrigin=Player->GetActorLocation();
@@ -120,7 +118,6 @@ public:
                 const TArray<FVector2D> Diamond={P+FVector2D(0,-5),P+FVector2D(5,0),P+FVector2D(0,5),P+FVector2D(-5,0),P+FVector2D(0,-5)};
                 FSlateDrawElement::MakeLines(Out,Layer+3,G.ToPaintGeometry(),Diamond,ESlateDrawEffect::None,FLinearColor(.1f,.8f,1.f,1.f),true,2.f);
             }
-            // Outline occupied cells rather than drawing disconnected tiny squares.
             TSet<FIntPoint> Occupied;
             const FVector Origin=Walls.IsEmpty() ? FVector::ZeroVector : Walls[0];
             for (const FVector& Wall : Walls)
@@ -133,8 +130,6 @@ public:
                 return Center+FVector2D(FVector::DotProduct(Delta,Right),-FVector::DotProduct(Delta,Forward))*(Radius-5.f)/Range;
             };
             const FIntPoint Neighbors[]={{-1,0},{1,0},{0,-1},{0,1}};
-            // Flood from outside the sampled footprint. Enclosed empty rooms are
-            // not exterior space, so their walls must not appear on the radar.
             TSet<FIntPoint> Exterior;
             if (!Occupied.IsEmpty())
             {
@@ -223,14 +218,12 @@ void UCSHRadarWidget::UpdateRadarSystem()
         const FTransform Transform(FRotator::ZeroRotator,Player->GetActorLocation());
         RadarActor=GetWorld()->SpawnActorDeferred<AActor>(RadarClass,Transform,Player,Player,ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
         if (!RadarActor) return;
-        auto* Range=FindFProperty<FDoubleProperty>(RadarClass,TEXT("Range"));
+        RadarRangeProperty=FindFProperty<FDoubleProperty>(RadarClass,TEXT("Range"));
         auto* Tag=FindFProperty<FNameProperty>(RadarClass,TEXT("Detect Tag"));
         auto* Target=FindFProperty<FObjectPropertyBase>(RadarClass,TEXT("Render Target"));
         auto* Screens=FindFProperty<FArrayProperty>(RadarClass,TEXT("Screen Actors"));
-        if (!Range || !Tag || !Target || !Screens)
+        if (!RadarRangeProperty || !Tag || !Target || !Screens)
         { RadarActor->Destroy(); RadarActor=nullptr; return; }
-        // The vendor construction macro indexes element zero even for an empty array.
-        // Supply a hidden mesh endpoint that shares the actual UI material instance.
         FScriptArrayHelper ScreenArray(Screens,Screens->ContainerPtrToValuePtr<void>(RadarActor));
         ScreenArray.EmptyValues();
         auto* ScreenStruct=CastField<FStructProperty>(Screens->Inner);
@@ -248,7 +241,8 @@ void UCSHRadarWidget::UpdateRadarSystem()
         ScreenEndpoint->RegisterComponent();
         ScreenArray.AddValue();
         ScreenActorProperty->SetObjectPropertyValue_InContainer(ScreenArray.GetRawPtr(0),RadarActor);
-        Range->SetPropertyValue_InContainer(RadarActor,DetectionRange);
+        AppliedDetectionRange=FMath::Max(100.f,DetectionRange);
+        RadarRangeProperty->SetPropertyValue_InContainer(RadarActor,AppliedDetectionRange);
         Tag->SetPropertyValue_InContainer(RadarActor,TEXT("CSHRadarEnemy"));
         Target->SetObjectPropertyValue_InContainer(RadarActor,RadarTarget);
         if (auto* DotRadius=FindFProperty<FDoubleProperty>(RadarClass,TEXT("Dot Radius")))
@@ -257,8 +251,12 @@ void UCSHRadarWidget::UpdateRadarSystem()
         RadarActor->FinishSpawning(Transform);
     }
     RadarActor->SetActorLocation(Player->GetActorLocation());
-    if (auto* Range=FindFProperty<FDoubleProperty>(RadarActor->GetClass(),TEXT("Range")))
-        Range->SetPropertyValue_InContainer(RadarActor,FMath::Max(100.f,DetectionRange));
+    const float NewRange=FMath::Max(100.f,DetectionRange);
+    if (RadarRangeProperty && !FMath::IsNearlyEqual(NewRange,AppliedDetectionRange))
+    {
+        RadarRangeProperty->SetPropertyValue_InContainer(RadarActor,NewRange);
+        AppliedDetectionRange=NewRange;
+    }
 }
 
 void UCSHRadarWidget::NativeDestruct()
@@ -267,5 +265,7 @@ void UCSHRadarWidget::NativeDestruct()
     RadarActor=nullptr;
     RadarMaterial=nullptr;
     RadarTarget=nullptr;
+    RadarRangeProperty=nullptr;
+    AppliedDetectionRange=-1.0f;
     Super::NativeDestruct();
 }

@@ -18,7 +18,6 @@ class SECONDSEMESTER_TEAM_API ASS_Enemy : public ACharacter
 public:
 	ASS_Enemy();
 
-	/** Velocity sampled before the latest physics impact; used for impact damage. */
 	FVector GetRecentDriveVelocity() const { return RecentDriveVelocity; }
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Audio")
@@ -39,11 +38,9 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SS Enemy Audio")
 	TObjectPtr<UAudioComponent> RandomSoundComponent;
 
-	/** Small identification light carried by every enemy vehicle. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SS Enemy Light")
 	TObjectPtr<UPointLightComponent> EnemyLight;
 
-	/** Boss enemies receive one health bar each below the wave label. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Boss")
 	bool bIsBossEnemy = false;
 
@@ -62,7 +59,6 @@ public:
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "SS Enemy Combat")
 	bool bIsDead = false;
 
-	/** Damage per car at the reference closing speed below. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Combat", meta = (ClampMin = "0.0", DisplayName = "Car Collision Damage at Reference Speed"))
 	float CollisionDamage = 5.0f;
 
@@ -75,7 +71,6 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Combat", meta = (ClampMin = "0.0"))
 	float MaximumCollisionDamage = 20.0f;
 
-	/** Minimum seconds between collision damage ticks on this car. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Combat", meta = (ClampMin = "0.05", Units = "s"))
 	float CollisionDamageCooldown = 0.5f;
 
@@ -85,7 +80,6 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Combat|Effects")
 	TObjectPtr<USoundBase> HitSound;
 
-	/** Prevents one player collision from producing several overlapping hit sounds. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Combat|Effects",
 		meta = (ClampMin = "0.0", Units = "s"))
 	float PlayerImpactSoundCooldown = 0.35f;
@@ -99,7 +93,6 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "SS Enemy Combat")
 	void ApplyCarDamage(float Damage, FVector HitLocation);
 
-	/** Marks a skewered enemy defeated without removing its vehicle mesh immediately. */
 	UFUNCTION(BlueprintCallable, Category = "SS Enemy Combat")
 	void MarkCapturedAsDefeated();
 
@@ -109,105 +102,80 @@ public:
 	UFUNCTION(BlueprintImplementableEvent, Category = "SS Enemy Combat")
 	void OnCarDamaged(float Damage, FVector HitLocation);
 
-	/** Called before destruction; spawn additional debris here. */
 	UFUNCTION(BlueprintImplementableEvent, Category = "SS Enemy Combat")
 	void OnCarExploded();
 
-	/** Changes the actor pursued by this enemy. Passing nullptr restores player tracking. */
 	UFUNCTION(BlueprintCallable, Category = "SS Enemy Movement")
 	void SetFollowTarget(AActor* NewTarget);
 
-	/** Maximum mass-independent acceleration toward the current navigation point in cm/s squared. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Movement", meta = (ClampMin = "0.0", DisplayName = "Max Drive Acceleration"))
 	float MaxMovementForce = 2400.0f;
 
-	/** Desired planar speed while following the path. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Movement", meta = (ClampMin = "0.0"))
 	float FollowSpeed = 1300.0f;
 
-	/** Natural planar drag. Lower values preserve more momentum while turning. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Movement|Physics", meta = (ClampMin = "0.0", DisplayName = "Linear Drag"))
 	float SteeringGain = 0.08f;
 
-	/** Seconds of mostly straight driving required to reach full engine force. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Movement|Physics", meta = (ClampMin = "0.05"))
 	float StraightAccelerationTime = 2.5f;
 
-	/** Fraction of engine force available from a standstill or immediately after a sharp turn. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Movement|Physics", meta = (ClampMin = "0.0", ClampMax = "1.0"))
 	float MinimumDriveForceRatio = 0.35f;
 
-	/** Multiplies forward force while the low obstacle probe detects a climbable curb. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Movement|Physics|Curb Climb", meta = (ClampMin = "1.0"))
 	float CurbDriveForceMultiplier = 3.0f;
 
-	/** Upward mass-independent acceleration used to lift the vehicle over a curb. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Movement|Physics|Curb Climb", meta = (ClampMin = "0.0"))
 	float CurbUpwardAcceleration = 1800.0f;
 
-	/** Distance ahead of the vehicle checked for a curb. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Movement|Physics|Curb Climb", meta = (ClampMin = "0.0"))
 	float CurbProbeDistance = 340.0f;
 
-	/** Obstacles lower than this height are treated as climbable curbs instead of walls. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Movement|Physics|Curb Climb", meta = (ClampMin = "1.0"))
 	float MaximumClimbableCurbHeight = 85.0f;
 
-	/** Uses the root capsule as a freely rotating rigid body instead of kinematic character movement. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Movement|Rigid Body")
 	bool bUseRigidBodyPhysics = true;
 
-	/** Applies a per-enemy Box size before it is welded into the simulated root body. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Movement|Rigid Body|Collision")
 	bool bOverrideVehicleCollisionBox = true;
 
-	/** Half-size of this vehicle's physical Box collider. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Movement|Rigid Body|Collision",
 		meta = (ClampMin = "1.0", Units = "cm"))
 	FVector VehicleCollisionBoxExtent = FVector(220.0f, 100.0f, 70.0f);
 
-	/** Box center relative to the actor root. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Movement|Rigid Body|Collision",
 		meta = (Units = "cm"))
 	FVector VehicleCollisionBoxOffset = FVector(0.0f, 0.0f, 55.0f);
 
-	/** Linear damping applied by Chaos to the physical capsule. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Movement|Rigid Body", meta = (ClampMin = "0.0"))
 	float RigidBodyLinearDamping = 0.15f;
 
-	/** Angular damping applied by Chaos. Lower values allow more collision-driven spinning. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Movement|Rigid Body", meta = (ClampMin = "0.0"))
 	float RigidBodyAngularDamping = 0.8f;
 
-	/** Maximum yaw angular acceleration used to face the physical movement direction. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Movement|Rigid Body", meta = (ClampMin = "0.0"))
 	float MaxYawAngularAcceleration = 12.0f;
 
-	/** Applies steering torque toward movement direction. Disabled uses only collision and inertia for rotation. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Movement|Rigid Body")
 	bool bUseMovementFacingTorque = false;
 
-	/** Extra distance used to change to the following path point before reaching the current one. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Movement|Physics", meta = (ClampMin = "0.0"))
 	float PathLookAheadTime = 0.35f;
 
-	/** How quickly the physical drive force changes toward a new path direction. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Movement|Physics", meta = (ClampMin = "0.0"))
 	float SteeringResponseSpeed = 2.5f;
 
-	/** Distance along the path used as the steering target, preventing attraction to points directly under the car. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Movement|Physics", meta = (ClampMin = "0.0", Units = "cm"))
 	float PathSteeringLookAheadDistance = 700.0f;
 
-	/** Distance at which a navigation point is considered reached. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Movement", meta = (ClampMin = "1.0"))
 	float PathPointAcceptanceRadius = 110.0f;
 
-	/** Distance from the target at which the enemy stops pushing forward. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Movement", meta = (ClampMin = "0.0"))
 	float TargetAcceptanceRadius = 140.0f;
 
-	/** Within this planar distance, rush directly toward the player instead of following path points. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Movement|Charge", meta = (ClampMin = "0.0", Units = "cm"))
 	float DirectChargeRadius = 300.0f;
 
@@ -217,38 +185,30 @@ public:
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "SS Enemy Movement|Charge")
 	bool bDirectChargeWithinRange = false;
 
-	/** Seconds between path updates while the target is moving. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Movement", meta = (ClampMin = "0.05"))
 	float PathRecalculationInterval = 0.35f;
 
-	/** How quickly the actor's forward direction aligns with its current movement direction. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Movement|Physics", meta = (ClampMin = "0.0", DisplayName = "Movement Facing Speed"))
 	float RotationInterpSpeed = 3.5f;
 
-	/** Maximum turn rate toward the current movement direction in degrees per second. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Movement|Physics", meta = (ClampMin = "0.0"))
 	float MaxAngularSpeed = 120.0f;
 
-	/** Draws the generated navigation points and the currently followed segment. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Movement")
 	bool bDrawDebugPath = false;
 
-	/** True while a usable NavMesh path to the target exists. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SS Enemy Movement")
 	bool bHasValidNavigationPath = false;
 
-	/** True when either the enemy or target is outside the NavMesh and direct pursuit is used. */
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "SS Enemy Movement|Navigation")
 	bool bDirectlyFollowingOffNavTarget = false;
 
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "SS Enemy Movement|Navigation")
 	bool bEnemyOutsideNavigation = false;
 
-	/** Circular navigation footprint that contains the Box even while the car is rotating. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Movement|Navigation", meta = (ClampMin = "1.0"))
 	float NavigationAgentRadius = 120.0f;
 
-	/** Total vehicle height used when selecting compatible navigation data. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Movement|Navigation", meta = (ClampMin = "1.0"))
 	float NavigationAgentHeight = 170.0f;
 
@@ -270,26 +230,21 @@ public:
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "SS Enemy Movement|Navigation Recovery")
 	bool bReturningToNavigation = false;
 
-	/** Teleports the car to nearby navigation if it is trying to drive but remains stuck. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Movement|Stuck Recovery")
 	bool bEnableStuckTeleport = true;
 
-	/** Seconds the car may remain within StuckMovementTolerance before recovery. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Movement|Stuck Recovery",
 		meta = (ClampMin = "0.5", Units = "s"))
 	float StuckTeleportDelay = 3.0f;
 
-	/** Minimum planar movement that resets the stuck timer. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Movement|Stuck Recovery",
 		meta = (ClampMin = "1.0", Units = "cm"))
 	float StuckMovementTolerance = 150.0f;
 
-	/** Maximum radius searched for a safe NavMesh teleport destination. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Movement|Stuck Recovery",
 		meta = (ClampMin = "100.0", Units = "cm"))
 	float StuckTeleportSearchRadius = 7000.0f;
 
-	/** Prevents recovery from selecting almost the same blocked position. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Movement|Stuck Recovery",
 		meta = (ClampMin = "50.0", Units = "cm"))
 	float StuckTeleportMinimumDistance = 500.0f;

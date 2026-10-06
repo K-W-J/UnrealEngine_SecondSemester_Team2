@@ -6,7 +6,6 @@
 class UPrimitiveComponent;
 class UParticleSystem;
 
-// Temporary carrier: preserves the real car and restores it when released.
 UCLASS(Blueprintable)
 class SECONDSEMESTER_TEAM_API ACSHTowedCar : public AActor
 {

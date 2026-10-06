@@ -20,18 +20,23 @@ int32 UCSHScoreSaveGame::LoadHighestPointCount()
 
 void UCSHScoreSaveGame::SaveIfHigher(const int32 PointCount)
 {
+	if (PointCount <= LoadHighestPointCount())
+	{
+		return;
+	}
+	SaveHighestPointCount(PointCount);
+}
+
+void UCSHScoreSaveGame::SaveHighestPointCount(const int32 PointCount)
+{
 	if (PointCount <= 0)
 	{
 		return;
 	}
 
 	UCSHScoreSaveGame* Save = Cast<UCSHScoreSaveGame>(
-		UGameplayStatics::LoadGameFromSlot(HighScoreSlot, HighScoreUserIndex));
+		UGameplayStatics::CreateSaveGameObject(StaticClass()));
 	if (!Save)
-	{
-		Save = Cast<UCSHScoreSaveGame>(UGameplayStatics::CreateSaveGameObject(StaticClass()));
-	}
-	if (!Save || PointCount <= Save->HighestPointCount)
 	{
 		return;
 	}

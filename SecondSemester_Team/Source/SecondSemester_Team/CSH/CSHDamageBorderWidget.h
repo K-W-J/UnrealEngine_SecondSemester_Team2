@@ -6,7 +6,6 @@
 
 class UBorder;
 
-/** Full-screen red edge flash shown briefly when the player takes damage. */
 UCLASS()
 class SECONDSEMESTER_TEAM_API UCSHDamageBorderWidget : public UUserWidget
 {

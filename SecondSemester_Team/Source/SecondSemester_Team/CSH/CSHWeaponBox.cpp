@@ -9,6 +9,28 @@
 #include "Materials/MaterialInterface.h"
 #include "UObject/ConstructorHelpers.h"
 #include "Sound/SoundBase.h"
+
+namespace
+{
+    USoundBase* PickRandomPickupSound(const TArray<TObjectPtr<USoundBase>>& Sounds)
+    {
+        if (Sounds.IsEmpty())
+        {
+            return nullptr;
+        }
+
+        const int32 StartIndex = FMath::RandRange(0, Sounds.Num() - 1);
+        for (int32 Offset = 0; Offset < Sounds.Num(); ++Offset)
+        {
+            if (USoundBase* Sound = Sounds[(StartIndex + Offset) % Sounds.Num()])
+            {
+                return Sound;
+            }
+        }
+        return nullptr;
+    }
+}
+
 ACSHWeaponBox::ACSHWeaponBox()
 {
     PrimaryActorTick.bCanEverTick = false;
@@ -108,28 +130,27 @@ void ACSHWeaponBox::TryPickup(AActor* OtherActor)
                     Candidates.AddUnique(Candidate);
             }
             if (Candidates.IsEmpty()) return;
+
+            if (Candidates.Num() > 1 && PreviousRandomWeaponClass)
+            {
+                Candidates.Remove(PreviousRandomWeaponClass);
+            }
             SelectedClass = Candidates[FMath::RandRange(0, Candidates.Num() - 1)];
         }
         if (!SelectedClass) return;
-        // Guard against overlap callbacks during weapon spawning.
         bPickupConsumed = true;
         if (Character->EquipWeapon(SelectedClass))
         {
+            SelectedWeaponClass = SelectedClass;
             GetWorldTimerManager().ClearTimer(PickupCheckTimer);
             if (ASecondSemester_TeamPlayerController* PlayerController =
                 Cast<ASecondSemester_TeamPlayerController>(Character->GetController()))
             {
                 PlayerController->AddWeaponBoxPoints(PickupPointValue);
             }
-            TArray<USoundBase*> ValidSounds;
-            for (USoundBase* Sound : PickupSounds)
+            if (USoundBase* PickupSound = PickRandomPickupSound(PickupSounds))
             {
-                if (Sound) ValidSounds.Add(Sound);
-            }
-            if (!ValidSounds.IsEmpty())
-            {
-                UGameplayStatics::PlaySound2D(this,
-                    ValidSounds[FMath::RandRange(0, ValidSounds.Num() - 1)], PickupSoundVolume);
+                UGameplayStatics::PlaySound2D(this, PickupSound, PickupSoundVolume);
             }
             if (bDestroyAfterPickup) Destroy();
         }

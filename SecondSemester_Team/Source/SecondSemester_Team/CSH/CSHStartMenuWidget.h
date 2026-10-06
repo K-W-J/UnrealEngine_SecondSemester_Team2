@@ -11,7 +11,6 @@ class UTextBlock;
 class UTexture2D;
 class UVerticalBox;
 
-/** Full-screen title menu displayed before gameplay begins. */
 UCLASS()
 class SECONDSEMESTER_TEAM_API UCSHStartMenuWidget : public UUserWidget
 {

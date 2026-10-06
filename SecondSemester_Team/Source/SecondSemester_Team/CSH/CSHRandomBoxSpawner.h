@@ -3,6 +3,7 @@
 #include "GameFramework/Actor.h"
 #include "CSHRandomBoxSpawner.generated.h"
 class ACSHWeaponBox;
+class ACSHWeaponBase;
 
 UCLASS(Blueprintable)
 class SECONDSEMESTER_TEAM_API ACSHRandomBoxSpawner : public AActor
@@ -20,6 +21,7 @@ protected:
     virtual void EndPlay(const EEndPlayReason::Type Reason) override;
 private:
     TWeakObjectPtr<AActor> LastPoint;
+    TSubclassOf<ACSHWeaponBase> LastWeaponClass;
     FTimerHandle RespawnTimer;
     bool bStopping = false;
     void SpawnNextBox();

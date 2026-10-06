@@ -87,7 +87,6 @@ void ACSHWeaponBase::FireOnce()
             }
             if (ACharacter* HitCharacter = Cast<ACharacter>(Target)) HitCharacter->LaunchCharacter(Direction * MeleeKnockback, true, true);
         }
-        // Melee weapons lunge forward, then Tick smoothly restores the resting position.
         RecoilOffset.X = FMath::Min(RecoilOffset.X + WeaponKickDistance, WeaponKickDistance * 1.5f);
         BP_OnFired();
         if (!bAutomatic) StopFiring();
@@ -119,7 +118,6 @@ void ACSHWeaponBase::FireOnce()
         FVector ShotDirection = CenterDirection;
         if (ProjectilesPerShot > 1 && SpreadRadians > 0.0f)
         {
-            // Realistic buckshot pattern: random each shot, concentrated near the center.
             const float Radius = FMath::Square(FMath::FRand());
             const float Azimuth = FMath::FRandRange(0.0f, 2.0f * PI);
             const FVector RadialDirection = SpreadRight * FMath::Cos(Azimuth) + SpreadUp * FMath::Sin(Azimuth);

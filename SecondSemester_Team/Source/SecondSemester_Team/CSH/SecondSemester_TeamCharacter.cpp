@@ -28,6 +28,28 @@
 #include "Blueprint/UserWidget.h"
 #include "Sound/SoundBase.h"
 #include "UObject/ConstructorHelpers.h"
+#include "EngineUtils.h"
+
+namespace
+{
+	USoundBase* PickRandomSound(const TArray<TObjectPtr<USoundBase>>& Sounds)
+	{
+		if (Sounds.IsEmpty())
+		{
+			return nullptr;
+		}
+
+		const int32 StartIndex = FMath::RandRange(0, Sounds.Num() - 1);
+		for (int32 Offset = 0; Offset < Sounds.Num(); ++Offset)
+		{
+			if (USoundBase* Sound = Sounds[(StartIndex + Offset) % Sounds.Num()])
+			{
+				return Sound;
+			}
+		}
+		return nullptr;
+	}
+}
 
 ASecondSemester_TeamCharacter::ASecondSemester_TeamCharacter()
 {
@@ -37,13 +59,32 @@ ASecondSemester_TeamCharacter::ASecondSemester_TeamCharacter()
 	static ConstructorHelpers::FObjectFinder<USoundBase> FightingMan(TEXT("/Game/Audio/FunnyVoices/SFX_Voice_FightingMan.SFX_Voice_FightingMan"));
 	static ConstructorHelpers::FObjectFinder<USoundBase> ClearThroat(TEXT("/Game/Audio/FunnyVoices/SFX_Voice_ClearThroat.SFX_Voice_ClearThroat"));
 	HurtSounds = { PainScream.Object, BattleScream.Object, FightingMan.Object, ClearThroat.Object };
+	const TCHAR* CheatWeaponPaths[] =
+	{
+		TEXT("/Game/CSH/Buleprint/Weapons/AK47/BP_CSH_AK47.BP_CSH_AK47_C"),
+		TEXT("/Game/CSH/Buleprint/Weapons/BananaPistol/BP_CSH_BananaPistol.BP_CSH_BananaPistol_C"),
+		TEXT("/Game/CSH/Buleprint/Weapons/BulletLauncher/BP_CSH_BulletLauncher.BP_CSH_BulletLauncher_C"),
+		TEXT("/Game/CSH/Buleprint/Weapons/DoubleBarrelShotgun/BP_CSH_DoubleBarrelShotgun.BP_CSH_DoubleBarrelShotgun_C"),
+		TEXT("/Game/CSH/Buleprint/Weapons/EtherealBow/BP_CSH_EtherealBow.BP_CSH_EtherealBow_C"),
+		TEXT("/Game/CSH/Buleprint/Weapons/FeignDeath/BP_CSH_FeignDeath.BP_CSH_FeignDeath_C"),
+		TEXT("/Game/CSH/Buleprint/Weapons/RotaryCannon/BP_CSH_RotaryCannon.BP_CSH_RotaryCannon_C"),
+		TEXT("/Game/CSH/Buleprint/Weapons/RPGLauncher/BP_CSH_RPGLauncher.BP_CSH_RPGLauncher_C"),
+		TEXT("/Game/CSH/Buleprint/Weapons/SciFiPistol/BP_CSH_SciFiPistol.BP_CSH_SciFiPistol_C"),
+		TEXT("/Game/CSH/Buleprint/Weapons/SciFiSniper/BP_CSH_SciFiSniper.BP_CSH_SciFiSniper_C"),
+		TEXT("/Game/CSH/Buleprint/Weapons/StrelaLauncher/BP_CSH_StrelaLauncher.BP_CSH_StrelaLauncher_C"),
+		TEXT("/Game/CSH/Buleprint/Weapons/TemplarSword/BP_CSH_TemplarSword.BP_CSH_TemplarSword_C"),
+		TEXT("/Game/CSH/Buleprint/Weapons/TowSword/BP_CSH_TowSword.BP_CSH_TowSword_C"),
+		TEXT("/Game/CSH/Buleprint/Weapons/WaterGun/BP_CSH_WaterGun.BP_CSH_WaterGun_C")
+	};
+	for (const TCHAR* WeaponPath : CheatWeaponPaths)
+	{
+		CheatWeaponClasses.Add(TSoftClassPtr<ACSHWeaponBase>(FSoftObjectPath(WeaponPath)));
+	}
 	PrimaryActorTick.bCanEverTick = true;
 	Health = MaxHealth;
 	Stamina = MaxStamina;
-	// Set size for collision capsule  
 	GetCapsuleComponent()->InitCapsuleSize(55.f, 96.0f);
 	
-	// Create the first person mesh that will be viewed only by this character's owner
 	FirstPersonMesh = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("First Person Mesh"));
 
 	FirstPersonMesh->SetupAttachment(GetMesh());
@@ -55,7 +96,6 @@ FirstPersonMesh->SetRenderCustomDepth(true);
 FirstPersonMesh->SetCustomDepthStencilValue(42);
 	FirstPersonMesh->SetCollisionProfileName(FName("NoCollision"));
 
-	// Create the Camera Component	
 	FirstPersonCameraComponent = CreateDefaultSubobject<UCameraComponent>(TEXT("First Person Camera"));
 	FirstPersonCameraComponent->SetupAttachment(FirstPersonMesh, FName("head"));
 	FirstPersonCameraComponent->SetRelativeLocationAndRotation(FVector(-2.8f, 5.89f, 0.0f), FRotator(0.0f, 90.0f, -90.0f));
@@ -78,12 +118,10 @@ FirstPersonMesh->SetCustomDepthStencilValue(42);
 	CSHDeathCamera->SetActive(false);
 	CSHDeathCamera->bAutoActivate = false;
 
-	// Weapon attachment point exposed on BP_CSH_Player for easy viewport adjustment.
 	WeaponSocket = CreateDefaultSubobject<USceneComponent>(TEXT("WeaponSocket"));
 	WeaponSocket->SetupAttachment(FirstPersonCameraComponent);
 	WeaponSocket->SetRelativeLocation(FVector(35.0f, 12.0f, -18.0f));
 
-	// configure the character comps
 	GetMesh()->SetOwnerNoSee(true);
 	GetMesh()->FirstPersonPrimitiveType = EFirstPersonPrimitiveType::WorldSpaceRepresentation;
 	
@@ -96,7 +134,6 @@ GetMesh()->SetCustomDepthStencilValue(42);
 	OnActorHit.AddUniqueDynamic(this, &ASecondSemester_TeamCharacter::OnEnemyCarActorHit);
 	GetCapsuleComponent()->OnComponentHit.AddUniqueDynamic(this, &ASecondSemester_TeamCharacter::OnEnemyCarCapsuleHit);
 
-	// Configure character movement
 	GetCharacterMovement()->BrakingDecelerationFalling = 1500.0f;
 	GetCharacterMovement()->AirControl = 0.5f;
 	GetCharacterMovement()->MaxWalkSpeed = CSHWalkSpeed;
@@ -106,7 +143,6 @@ GetMesh()->SetCustomDepthStencilValue(42);
 void ASecondSemester_TeamCharacter::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
-    UpdateBodyVisibility(FirstPersonCameraComponent->IsActive() && !CSHDeathCamera->IsActive());
 	UpdateSprint(DeltaSeconds);
 	UpdateDamageCameraKick(DeltaSeconds);
 	EnsureDamageBorderWidget();
@@ -121,6 +157,7 @@ void ASecondSemester_TeamCharacter::Tick(float DeltaSeconds)
 void ASecondSemester_TeamCharacter::BeginPlay()
 {
     Super::BeginPlay();
+	CacheBodyMeshes();
 	EquipUnarmedWeapon();
 	Stamina = MaxStamina;
 	if (const AGameModeBase* GameMode = UGameplayStatics::GetGameMode(this))
@@ -229,15 +266,29 @@ void ASecondSemester_TeamCharacter::SetGameplayUIVisible(bool bVisible)
 		PlayerController->SetGameplayHUDVisible(bVisible);
 	}
 
-	TArray<AActor*> WaveManagers;
-	UGameplayStatics::GetAllActorsOfClass(this, ASS_WaveManager::StaticClass(), WaveManagers);
-	for (AActor* Actor : WaveManagers)
+	if (ASS_WaveManager* WaveManager = GetWaveManager())
 	{
-		if (ASS_WaveManager* WaveManager = Cast<ASS_WaveManager>(Actor))
-		{
-			WaveManager->SetWaveUIVisible(bVisible);
-		}
+		WaveManager->SetWaveUIVisible(bVisible);
 	}
+}
+
+ASS_WaveManager* ASecondSemester_TeamCharacter::GetWaveManager()
+{
+	if (IsValid(CachedWaveManager))
+	{
+		return CachedWaveManager;
+	}
+	if (!GetWorld())
+	{
+		return nullptr;
+	}
+
+	for (TActorIterator<ASS_WaveManager> It(GetWorld()); It; ++It)
+	{
+		CachedWaveManager = *It;
+		break;
+	}
+	return CachedWaveManager;
 }
 
 void ASecondSemester_TeamCharacter::EnsureDamageBorderWidget()
@@ -332,28 +383,54 @@ void ASecondSemester_TeamCharacter::ApplyEnemyCarImpact(ASS_Enemy* Enemy)
 
 void ASecondSemester_TeamCharacter::UpdateBodyVisibility(bool bFirstPerson)
 {
-    TArray<UMeshComponent*> BodyMeshes;
-    GetComponents<UMeshComponent>(BodyMeshes);
-    for (UMeshComponent* BodyPart : BodyMeshes)
-    {
-        // Actor-owned body meshes only: never propagate to camera-attached weapons.
-        const bool bHide = BodyPart == FirstPersonMesh || bFirstPerson;
-        if (BodyPart->FirstPersonPrimitiveType != EFirstPersonPrimitiveType::None)
-        {
-            BodyPart->FirstPersonPrimitiveType = EFirstPersonPrimitiveType::None;
-            BodyPart->MarkRenderStateDirty();
-        }
-        BodyPart->SetOnlyOwnerSee(false);
-        BodyPart->SetOwnerNoSee(bHide);
-        BodyPart->SetVisibility(!bHide, false);
-        BodyPart->SetHiddenInGame(bHide, false);
-    }
+	if (bBodyVisibilityInitialized && bBodyHiddenForFirstPerson == bFirstPerson)
+	{
+		return;
+	}
+
+	bBodyVisibilityInitialized = true;
+	bBodyHiddenForFirstPerson = bFirstPerson;
+	for (UMeshComponent* BodyPart : CachedBodyMeshes)
+	{
+		if (!IsValid(BodyPart))
+		{
+			continue;
+		}
+		const bool bHide = BodyPart == FirstPersonMesh || bFirstPerson;
+		BodyPart->SetOwnerNoSee(bHide);
+		BodyPart->SetVisibility(!bHide, false);
+		BodyPart->SetHiddenInGame(bHide, false);
+	}
+}
+
+void ASecondSemester_TeamCharacter::CacheBodyMeshes()
+{
+	CachedBodyMeshes.Reset();
+	TArray<UMeshComponent*> BodyMeshes;
+	GetComponents<UMeshComponent>(BodyMeshes);
+	CachedBodyMeshes.Reserve(BodyMeshes.Num());
+	for (UMeshComponent* BodyPart : BodyMeshes)
+	{
+		CachedBodyMeshes.Add(BodyPart);
+	}
+	for (UMeshComponent* BodyPart : CachedBodyMeshes)
+	{
+		if (!IsValid(BodyPart))
+		{
+			continue;
+		}
+		if (BodyPart->FirstPersonPrimitiveType != EFirstPersonPrimitiveType::None)
+		{
+			BodyPart->FirstPersonPrimitiveType = EFirstPersonPrimitiveType::None;
+			BodyPart->MarkRenderStateDirty();
+		}
+		BodyPart->SetOnlyOwnerSee(false);
+	}
 }
 
 void ASecondSemester_TeamCharacter::CalcCamera(float DeltaTime, FMinimalViewInfo& OutResult)
 {
     Super::CalcCamera(DeltaTime, OutResult);
-    // Use the actual chosen POV, after Blueprint tick and camera activation.
     const bool bAtHead = FVector::DistSquared(OutResult.Location,
         FirstPersonCameraComponent->GetComponentLocation()) < FMath::Square(50.0f);
     UpdateBodyVisibility(bAtHead && !CSHDeathCamera->IsActive());
@@ -370,15 +447,9 @@ float ASecondSemester_TeamCharacter::TakeDamage(float DamageAmount, FDamageEvent
 	}
 	if (FinalDamage > 0.0f)
 	{
-		TArray<USoundBase*> ValidHurtSounds;
-		for (USoundBase* Sound : HurtSounds)
+		if (USoundBase* HurtSound = PickRandomSound(HurtSounds))
 		{
-			if (Sound) ValidHurtSounds.Add(Sound);
-		}
-		if (!ValidHurtSounds.IsEmpty())
-		{
-			UGameplayStatics::PlaySound2D(this,
-				ValidHurtSounds[FMath::RandRange(0, ValidHurtSounds.Num() - 1)], HurtSoundVolume);
+			UGameplayStatics::PlaySound2D(this, HurtSound, HurtSoundVolume);
 		}
 		ApplyDamageCameraKick(FinalDamage, DamageCauser);
 		DamageBorderTimeRemaining = FMath::Max(DamageBorderDuration, 0.05f);
@@ -592,6 +663,10 @@ void ASecondSemester_TeamCharacter::SetupPlayerInputComponent(UInputComponent* P
 	PlayerInputComponent->BindKey(EKeys::LeftShift, IE_Released, this, &ASecondSemester_TeamCharacter::StopSprint);
 	PlayerInputComponent->BindKey(EKeys::Hyphen, IE_Pressed, this, &ASecondSemester_TeamCharacter::DebugTakeDamage);
 	PlayerInputComponent->BindKey(EKeys::Equals, IE_Pressed, this, &ASecondSemester_TeamCharacter::DebugHeal);
+	PlayerInputComponent->BindKey(EKeys::Nine, IE_Pressed, this, &ASecondSemester_TeamCharacter::CheatKillAllEnemies);
+	PlayerInputComponent->BindKey(EKeys::NumPadNine, IE_Pressed, this, &ASecondSemester_TeamCharacter::CheatKillAllEnemies);
+	PlayerInputComponent->BindKey(EKeys::Zero, IE_Pressed, this, &ASecondSemester_TeamCharacter::CheatEquipRandomWeapon);
+	PlayerInputComponent->BindKey(EKeys::NumPadZero, IE_Pressed, this, &ASecondSemester_TeamCharacter::CheatEquipRandomWeapon);
 
 	// Set up action bindings
 	if (UEnhancedInputComponent* EnhancedInputComponent = Cast<UEnhancedInputComponent>(PlayerInputComponent))
@@ -613,23 +688,64 @@ void ASecondSemester_TeamCharacter::SetupPlayerInputComponent(UInputComponent* P
 	}
 }
 
+void ASecondSemester_TeamCharacter::CheatKillAllEnemies()
+{
+	if (!GetWorld())
+	{
+		return;
+	}
+
+	TArray<TWeakObjectPtr<ASS_Enemy>> LivingEnemies;
+	for (TActorIterator<ASS_Enemy> It(GetWorld()); It; ++It)
+	{
+		if (IsValid(*It) && !It->bIsDead && !It->IsActorBeingDestroyed())
+		{
+			LivingEnemies.Add(*It);
+		}
+	}
+
+	for (const TWeakObjectPtr<ASS_Enemy>& Enemy : LivingEnemies)
+	{
+		if (Enemy.IsValid())
+		{
+			Enemy->ApplyCarDamage(FMath::Max(Enemy->CurrentHealth, 1.0f), Enemy->GetActorLocation());
+		}
+	}
+}
+
+void ASecondSemester_TeamCharacter::CheatEquipRandomWeapon()
+{
+	if (CheatWeaponClasses.IsEmpty())
+	{
+		return;
+	}
+
+	const int32 StartIndex = FMath::RandRange(0, CheatWeaponClasses.Num() - 1);
+	for (int32 Offset = 0; Offset < CheatWeaponClasses.Num(); ++Offset)
+	{
+		const int32 Index = (StartIndex + Offset) % CheatWeaponClasses.Num();
+		if (UClass* WeaponClass = CheatWeaponClasses[Index].LoadSynchronous())
+		{
+			if (!WeaponClass->HasAnyClassFlags(CLASS_Abstract | CLASS_Deprecated | CLASS_NewerVersionExists))
+			{
+				EquipWeapon(WeaponClass);
+				return;
+			}
+		}
+	}
+}
+
 
 void ASecondSemester_TeamCharacter::MoveInput(const FInputActionValue& Value)
 {
-	// get the Vector2D move axis
 	FVector2D MovementVector = Value.Get<FVector2D>();
-
-	// pass the axis values to the move input
 	DoMove(MovementVector.X, MovementVector.Y);
 
 }
 
 void ASecondSemester_TeamCharacter::LookInput(const FInputActionValue& Value)
 {
-	// get the Vector2D look axis
 	FVector2D LookAxisVector = Value.Get<FVector2D>();
-
-	// pass the axis values to the aim input
 	DoAim(LookAxisVector.X, LookAxisVector.Y);
 
 }
@@ -638,7 +754,6 @@ void ASecondSemester_TeamCharacter::DoAim(float Yaw, float Pitch)
 {
 	if (GetController())
 	{
-		// pass the rotation inputs
 		AddControllerYawInput(Yaw);
 		AddControllerPitchInput(Pitch);
 	}
@@ -648,7 +763,6 @@ void ASecondSemester_TeamCharacter::DoMove(float Right, float Forward)
 {
 	if (GetController())
 	{
-		// pass the move inputs
 		AddMovementInput(GetActorRightVector(), Right);
 		AddMovementInput(GetActorForwardVector(), Forward);
 	}
@@ -656,13 +770,11 @@ void ASecondSemester_TeamCharacter::DoMove(float Right, float Forward)
 
 void ASecondSemester_TeamCharacter::DoJumpStart()
 {
-	// pass Jump to the character
 	Jump();
 }
 
 void ASecondSemester_TeamCharacter::DoJumpEnd()
 {
-	// pass StopJumping to the character
 	StopJumping();
 }
 

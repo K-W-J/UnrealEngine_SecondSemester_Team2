@@ -64,7 +64,6 @@ void ACSHFeignDeathWeapon::Tick(float DeltaSeconds)
 void ACSHFeignDeathWeapon::Spray()
 {
     const FVector Center = CharacterOwner->GetMesh()->GetSocketLocation(TEXT("pelvis")) + FVector(0,0,30);
-    // Opposing shots turn around the body, independent of the hidden first-person gun.
     for (int32 i=0; i<2; ++i)
     {
         const FRotator Rotation(5.f, Elapsed * SpinSpeed + i * 180.f, 0.f);
@@ -87,7 +86,6 @@ void ACSHFeignDeathWeapon::FinishFeign()
         { PC->SetIgnoreMoveInput(false); PC->SetIgnoreLookInput(false); }
         bChangedInput = false;
     }
-    // Actual death keeps its own ragdoll/camera/input state; never resurrect it.
     if (CharacterOwner->GetHealth() <= 0) return;
     auto* Body = CharacterOwner->GetMesh();
     Body->SetAllPhysicsLinearVelocity(FVector::ZeroVector);

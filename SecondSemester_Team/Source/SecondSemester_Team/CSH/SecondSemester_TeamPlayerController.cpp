@@ -13,6 +13,7 @@
 #include "UObject/SoftObjectPath.h"
 #include "SecondSemester_Team.h"
 #include "Widgets/Input/SVirtualJoystick.h"
+#include "TimerManager.h"
 
 ASecondSemester_TeamPlayerController::ASecondSemester_TeamPlayerController()
 {
@@ -50,7 +51,11 @@ void ASecondSemester_TeamPlayerController::AddWeaponBoxPoints(int32 Amount)
 		return;
 	}
 	WeaponBoxPointCount += Amount;
-	UCSHScoreSaveGame::SaveIfHigher(WeaponBoxPointCount);
+	if (WeaponBoxPointCount > HighestPointCount)
+	{
+		HighestPointCount = WeaponBoxPointCount;
+		QueueHighScoreSave();
+	}
 	if (MainUIWidget)
 	{
 		MainUIWidget->SetPointCount(WeaponBoxPointCount);
@@ -82,6 +87,7 @@ void ASecondSemester_TeamPlayerController::SetGameplayHUDVisible(bool bVisible)
 void ASecondSemester_TeamPlayerController::BeginPlay()
 {
 	Super::BeginPlay();
+	HighestPointCount = UCSHScoreSaveGame::LoadHighestPointCount();
 
 	if (IsLocalPlayerController())
 	{
@@ -129,6 +135,31 @@ void ASecondSemester_TeamPlayerController::BeginPlay()
 		}
 
 	}
+}
+
+void ASecondSemester_TeamPlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	FlushHighScoreSave();
+	Super::EndPlay(EndPlayReason);
+}
+
+void ASecondSemester_TeamPlayerController::QueueHighScoreSave()
+{
+	bHighScoreDirty = true;
+	GetWorldTimerManager().SetTimer(
+		HighScoreSaveTimer, this, &ASecondSemester_TeamPlayerController::FlushHighScoreSave, 0.75f, false);
+}
+
+void ASecondSemester_TeamPlayerController::FlushHighScoreSave()
+{
+	if (!bHighScoreDirty)
+	{
+		return;
+	}
+
+	bHighScoreDirty = false;
+	GetWorldTimerManager().ClearTimer(HighScoreSaveTimer);
+	UCSHScoreSaveGame::SaveHighestPointCount(HighestPointCount);
 }
 
 void ASecondSemester_TeamPlayerController::SetupInputComponent()

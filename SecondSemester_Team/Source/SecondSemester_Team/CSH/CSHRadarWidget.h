@@ -5,6 +5,7 @@
 class UTexture2D;
 class UMaterialInstanceDynamic;
 class UTextureRenderTarget2D;
+class FDoubleProperty;
 UCLASS(Blueprintable)
 class SECONDSEMESTER_TEAM_API UCSHRadarWidget : public UUserWidget
 {
@@ -27,4 +28,6 @@ private:
     UPROPERTY(Transient) TObjectPtr<AActor> RadarActor;
     UPROPERTY(Transient) TObjectPtr<UMaterialInstanceDynamic> RadarMaterial;
     UPROPERTY(Transient) TObjectPtr<UTextureRenderTarget2D> RadarTarget;
+    FDoubleProperty* RadarRangeProperty = nullptr;
+    float AppliedDetectionRange = -1.0f;
 };
