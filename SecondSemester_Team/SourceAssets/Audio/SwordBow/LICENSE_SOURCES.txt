@@ -1,0 +1,12 @@
+Sword: swishes/swish-7.wav, from Swishes Sound Pack by artisticdude.
+https://opengameart.org/content/swishes-sound-pack
+Download: https://opengameart.org/sites/default/files/swishes.zip
+License: CC0, https://creativecommons.org/publicdomain/zero/1.0/
+Unmodified recording. Selected for TemplarSword swing only.
+
+Bow: Archery (sound 0549) by Joseph SARDIN / BigSoundBank / LaSonotheque.
+https://bigsoundbank.com/archery-s0549.html
+Download: https://bigsoundbank.com/UPLOAD/bwf-en/0549.wav
+License: CC0, https://creativecommons.org/publicdomain/zero/1.0/
+BowRelease_Single.wav: first release excerpt, 0.098 to 0.343 seconds.
+No synthesized audio added. Source pages checked 2026-10-06.
