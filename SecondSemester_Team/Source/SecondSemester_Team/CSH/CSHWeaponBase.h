@@ -8,6 +8,7 @@ class USceneComponent;
 class UStaticMeshComponent;
 class UNiagaraSystem;
 class USoundBase;
+class UAudioComponent;
 class UTexture2D;
 UCLASS(Blueprintable)
 class SECONDSEMESTER_TEAM_API ACSHWeaponBase : public AActor
@@ -16,6 +17,7 @@ class SECONDSEMESTER_TEAM_API ACSHWeaponBase : public AActor
 public:
     ACSHWeaponBase();
     virtual void Tick(float DeltaSeconds) override;
+    virtual void EndPlay(const EEndPlayReason::Type Reason) override;
     void EquipTo(ASecondSemester_TeamCharacter* NewOwner);
     virtual void StartFiring();
     void StopFiring();
@@ -53,6 +55,10 @@ protected:
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Recoil", meta=(ClampMin="0", Units="Degrees")) float CameraYawKick = 0.25f;
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Effects") UNiagaraSystem* MuzzleFlash;
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Effects") USoundBase* FireSound;
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Effects|Audio") bool bLoopFireSound = false;
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Effects|Audio") TObjectPtr<UAudioComponent> FireLoopAudio;
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Effects|Audio", meta=(ClampMin="0", ClampMax="2")) float FireSoundVolume = 0.7f;
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Effects|Audio", meta=(ClampMin="0")) float FireSoundMinInterval = 0.065f;
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Attachment") FTransform EquippedRelativeTransform = FTransform(FRotator::ZeroRotator, FVector(25.0f, 12.0f, -18.0f));
     UFUNCTION(BlueprintImplementableEvent, Category="Weapon", meta=(DisplayName="On Fired")) void BP_OnFired();
 protected:
@@ -64,5 +70,8 @@ protected:
     UPROPERTY(VisibleInstanceOnly, Category="Weapon|Ammo") int32 CurrentAmmo = 0;
     UPROPERTY(VisibleInstanceOnly, Category="Weapon|Ammo") int32 ReserveAmmo = 0;
     void FireOnce();
+    void PlayFireAudio(const FVector& Location);
+    float NextFireAudioTime = -1.0f;
+    bool bLoopAudioActive = false;
 };
 

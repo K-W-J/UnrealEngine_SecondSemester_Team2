@@ -5,6 +5,7 @@
 
 class UPrimitiveComponent;
 class UParticleSystem;
+class USoundBase;
 
 // Temporary carrier: preserves the real car and restores it when released.
 UCLASS(Blueprintable)
@@ -19,6 +20,7 @@ public:
     virtual void Tick(float DeltaSeconds) override;
     virtual void EndPlay(const EEndPlayReason::Type Reason) override;
     UPROPERTY(EditDefaultsOnly, Category="Weapon|Tow") UParticleSystem* ImpactEffect;
+    UPROPERTY(EditDefaultsOnly, Category="Weapon|Tow") TObjectPtr<USoundBase> ImpactExplosionSound;
     UPROPERTY(EditDefaultsOnly, Category="Weapon|Tow") float EffectScale = 3.f;
     UPROPERTY(EditDefaultsOnly, Category="Weapon|Tow") float FlightSeconds = 5.f;
     UPROPERTY(EditDefaultsOnly, Category="Weapon|Tow") float Gravity = 350.f;

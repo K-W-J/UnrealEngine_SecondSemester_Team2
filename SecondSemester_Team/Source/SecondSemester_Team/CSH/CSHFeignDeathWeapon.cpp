@@ -64,6 +64,7 @@ void ACSHFeignDeathWeapon::Tick(float DeltaSeconds)
 void ACSHFeignDeathWeapon::Spray()
 {
     const FVector Center = CharacterOwner->GetMesh()->GetSocketLocation(TEXT("pelvis")) + FVector(0,0,30);
+    PlayFireAudio(Center);
     // Opposing shots turn around the body, independent of the hidden first-person gun.
     for (int32 i=0; i<2; ++i)
     {

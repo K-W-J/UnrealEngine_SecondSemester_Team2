@@ -43,6 +43,7 @@ void ACSHTowSword::StartFiring()
         || GetWorld()->GetTimeSeconds() < NextAllowedFireTime) return;
     NextAllowedFireTime = GetWorld()->GetTimeSeconds() + FMath::Max(.05f, FireInterval);
     RecoilOffset.X = WeaponKickDistance;
+    PlayFireAudio(GetActorLocation());
     BP_OnFired();
     const auto* Camera = CharacterOwner->GetFirstPersonCameraComponent();
     const FVector Start = Camera->GetComponentLocation();
@@ -97,6 +98,7 @@ void ACSHTowSword::Reload()
             Direction, ThrowSpeed, ImpactDamage, ImpactRadius);
     }
     Cars.Empty();
+    PlayFireAudio(GetActorLocation());
     RecoilOffset.X = -WeaponKickDistance;
     NextAllowedFireTime = GetWorld()->GetTimeSeconds() + FireInterval;
 }
