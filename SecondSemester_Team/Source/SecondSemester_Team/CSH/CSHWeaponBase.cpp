@@ -3,6 +3,7 @@
 #include "SecondSemester_TeamCharacter.h"
 #include "Camera/CameraComponent.h"
 #include "Components/SceneComponent.h"
+#include "Components/AudioComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/World.h"
 #include "GameFramework/Character.h"
@@ -25,6 +26,9 @@ ACSHWeaponBase::ACSHWeaponBase()
     WeaponMesh->SetCustomDepthStencilValue(42);
     WeaponMesh->SetOwnerNoSee(false);
     MuzzlePoint = CreateDefaultSubobject<USceneComponent>(TEXT("MuzzlePoint")); MuzzlePoint->SetupAttachment(RecoilRoot);
+    FireLoopAudio = CreateDefaultSubobject<UAudioComponent>(TEXT("FireLoopAudio"));
+    FireLoopAudio->SetupAttachment(MuzzlePoint);
+    FireLoopAudio->bAutoActivate = false;
 }
 void ACSHWeaponBase::Tick(float DeltaSeconds)
 {
@@ -50,7 +54,38 @@ void ACSHWeaponBase::StartFiring()
     bTriggerHeld = true; FireOnce();
     if (bAutomatic) GetWorldTimerManager().SetTimer(FireTimer, this, &ACSHWeaponBase::FireOnce, FireInterval, true, FireInterval);
 }
-void ACSHWeaponBase::StopFiring() { bTriggerHeld = false; GetWorldTimerManager().ClearTimer(FireTimer); }
+void ACSHWeaponBase::StopFiring()
+{
+    bTriggerHeld = false;
+    GetWorldTimerManager().ClearTimer(FireTimer);
+    if (bLoopAudioActive) FireLoopAudio->FadeOut(0.035f, 0.f);
+    bLoopAudioActive = false;
+}
+void ACSHWeaponBase::EndPlay(const EEndPlayReason::Type Reason)
+{
+    StopFiring();
+    FireLoopAudio->Stop();
+    Super::EndPlay(Reason);
+}
+void ACSHWeaponBase::PlayFireAudio(const FVector& Location)
+{
+    if (!FireSound || !GetWorld()) return;
+    if (bLoopFireSound)
+    {
+        if (!bLoopAudioActive)
+        {
+            FireLoopAudio->SetSound(FireSound);
+            FireLoopAudio->SetVolumeMultiplier(FireSoundVolume);
+            FireLoopAudio->FadeIn(0.025f);
+            bLoopAudioActive = true;
+        }
+        return;
+    }
+    if (GetWorld()->GetTimeSeconds() < NextFireAudioTime) return;
+    NextFireAudioTime = GetWorld()->GetTimeSeconds() + FireSoundMinInterval;
+    UGameplayStatics::PlaySoundAtLocation(this, FireSound, Location,
+        FireSoundVolume, FMath::FRandRange(0.96f, 1.04f));
+}
 void ACSHWeaponBase::Reload()
 {
     if (bInfiniteAmmo || CurrentAmmo >= MagazineCapacity || ReserveAmmo <= 0) return;
@@ -88,6 +123,7 @@ void ACSHWeaponBase::FireOnce()
             if (ACharacter* HitCharacter = Cast<ACharacter>(Target)) HitCharacter->LaunchCharacter(Direction * MeleeKnockback, true, true);
         }
         RecoilOffset.X = FMath::Min(RecoilOffset.X + WeaponKickDistance, WeaponKickDistance * 1.5f);
+        PlayFireAudio(MuzzlePoint->GetComponentLocation());
         BP_OnFired();
         if (!bAutomatic) StopFiring();
         return;
@@ -143,7 +179,7 @@ void ACSHWeaponBase::FireOnce()
             EAttachLocation::SnapToTargetIncludingScale,
             true);
     }
-    if (FireSound) UGameplayStatics::PlaySoundAtLocation(this, FireSound, MuzzleLoc);
+    PlayFireAudio(MuzzleLoc);
     RecoilOffset.X = FMath::Max(RecoilOffset.X - WeaponKickDistance, -WeaponKickDistance * 1.5f);
     CharacterOwner->AddControllerPitchInput(-CameraPitchKick);
     CharacterOwner->AddControllerYawInput(FMath::FRandRange(-CameraYawKick, CameraYawKick));

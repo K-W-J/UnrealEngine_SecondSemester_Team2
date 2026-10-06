@@ -9,6 +9,7 @@
 #include "GameFramework/ProjectileMovementComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "Particles/ParticleSystem.h"
+#include "Sound/SoundBase.h"
 #include "UObject/ConstructorHelpers.h"
 #include "SecondSemester_TeamCharacter.h"
 
@@ -125,6 +126,11 @@ void ACSHBullet::OnBulletHit(UPrimitiveComponent*, AActor* OtherActor, UPrimitiv
         {
             Player->ApplyExplosionCameraShake(Hit.ImpactPoint, CameraShakeInnerRadius, CameraShakeOuterRadius);
         }
+    }
+    if ((bSpawnImpactExplosion || bExplosive) && ImpactExplosionSound)
+    {
+        UGameplayStatics::PlaySoundAtLocation(this, ImpactExplosionSound, Hit.ImpactPoint,
+            0.85f, FMath::FRandRange(0.93f, 1.03f));
     }
     if (bExplosive)
     {
