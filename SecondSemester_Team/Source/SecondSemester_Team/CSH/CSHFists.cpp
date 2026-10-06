@@ -62,6 +62,7 @@ void ACSHFists::StartFiring()
     NextAllowedFireTime=GetWorld()->GetTimeSeconds()+FMath::Max(.1f,FireInterval);
     bLeftPunch=!bLeftPunch;
     PunchTime=0.f;
+    PlayFireAudio(GetActorLocation());
     const auto* Camera=CharacterOwner->GetFirstPersonCameraComponent();
     const FVector Start=Camera->GetComponentLocation(), Direction=Camera->GetForwardVector();
     FCollisionQueryParams Query(SCENE_QUERY_STAT(CSHFist),false,CharacterOwner);

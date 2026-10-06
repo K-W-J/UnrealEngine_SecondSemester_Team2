@@ -1,0 +1,20 @@
+CSH game SFX sources
+
+AK47, Shotgun and Rotary use processed samples exported from the project's
+existing /Game/Art/CSH/NW_MuzzleFX/Sound/Sfx/SW_5_56_new_01_v2 asset.
+RPG and Strela use a short layer of the same sample with synthesized launch noise.
+These are game sound designs, NOT verified recordings of those exact real weapons.
+The original asset pack's license continues to apply to these sample-derived sounds.
+Reference/ contains exports of that existing pack, not newly recorded audio.
+
+Other sounds are generated from deterministic oscillators and filtered noise by
+Tools/create_csh_audio.py. WaterGun is unpitched looping spray noise;
+SciFiPistol, Sniper and FeignDeath use saturated low-mid energy and noise.
+Explosion is a synthetic blast, low-frequency rumble and debris tail.
+
+Workflow:
+1. Unreal Python: Tools/export_csh_audio_sources.py (only needed to export originals).
+2. Python 3: Tools/create_csh_audio.py
+3. Unreal Python: Tools/import_csh_audio.py
+4. Unreal Python: Tools/verify_csh_audio.py (read-only validation).
+For commandlet import/export, include -AllowCommandletAudio to load audio decoders.

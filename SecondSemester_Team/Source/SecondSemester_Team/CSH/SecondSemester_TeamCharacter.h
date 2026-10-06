@@ -182,6 +182,11 @@ protected:
 	void SetGameplayUIVisible(bool bVisible);
 	void UpdateExplosionCameraShake(float DeltaSeconds);
 	void DebugTakeDamage();
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Player|Audio") TObjectPtr<USoundBase> HurtSound;
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Player|Audio") TObjectPtr<USoundBase> HeavyHurtSound;
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Player|Audio", meta=(ClampMin="0")) float HeavyHurtThreshold = 25.f;
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Player|Audio", meta=(ClampMin="0")) float HurtSoundCooldown = 0.15f;
+    float NextHurtSoundTime = -1.f;
 	void DebugHeal();
 	void EnterDeathState();
 	void CacheBodyMeshes();

@@ -1,4 +1,5 @@
 #include "CSHTowedCar.h"
+#include "Sound/SoundBase.h"
 #include "SecondSemester_TeamCharacter.h"
 #include "Enemies/SS_Enemy.h"
 #include "Components/PrimitiveComponent.h"
@@ -92,6 +93,7 @@ void ACSHTowedCar::Tick(float DeltaSeconds)
             UDamageType::StaticClass(), Ignore, this, GetInstigatorController(), true);
         if (ImpactEffect) UGameplayStatics::SpawnEmitterAtLocation(this, ImpactEffect,
             Hit.ImpactPoint, FRotator::ZeroRotator, FVector(EffectScale));
+        if (ImpactExplosionSound) UGameplayStatics::PlaySoundAtLocation(this, ImpactExplosionSound, Hit.ImpactPoint, .85f);
         if (auto* Player = Cast<ASecondSemester_TeamCharacter>(GetOwner()))
             Player->ApplyExplosionCameraShake(Hit.ImpactPoint, DamageRadius, DamageRadius * 3.f);
         Release();

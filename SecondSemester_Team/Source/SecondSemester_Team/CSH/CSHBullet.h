@@ -7,6 +7,7 @@ class UStaticMeshComponent;
 class UProjectileMovementComponent;
 class UPointLightComponent;
 class UParticleSystem;
+class USoundBase;
 UCLASS(Blueprintable)
 class SECONDSEMESTER_TEAM_API ACSHBullet : public AActor
 {
@@ -26,6 +27,7 @@ protected:
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Damage|Explosion", meta=(ClampMin="0")) float ExplosionDamage = 80.0f;
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Effects|Explosion") bool bSpawnImpactExplosion = false;
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Effects|Explosion") TObjectPtr<UParticleSystem> ImpactExplosionEffect;
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Effects|Explosion") TObjectPtr<USoundBase> ImpactExplosionSound;
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Effects|Explosion", meta=(ClampMin="0.01")) float ImpactExplosionScale = 1.0f;
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Effects|Explosion", meta=(ClampMin="0", Units="cm")) float CameraShakeInnerRadius = 250.0f;
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Effects|Explosion", meta=(ClampMin="0", Units="cm")) float CameraShakeOuterRadius = 1800.0f;
