@@ -14,6 +14,7 @@
 #include "NiagaraSystem.h"
 #include "Sound/SoundBase.h"
 #include "Components/AudioComponent.h"
+#include "Components/PointLightComponent.h"
 #include "TimerManager.h"
 #include "Engine/DamageEvents.h"
 #include "EngineUtils.h"
@@ -26,6 +27,14 @@ ASS_Enemy::ASS_Enemy()
 	RandomSoundComponent->SetupAttachment(GetRootComponent());
 	RandomSoundComponent->bAutoActivate = false;
 	RandomSoundComponent->bStopWhenOwnerDestroyed = true;
+
+	EnemyLight = CreateDefaultSubobject<UPointLightComponent>(TEXT("EnemyLight"));
+	EnemyLight->SetupAttachment(GetRootComponent());
+	EnemyLight->SetRelativeLocation(FVector(140.0f, 0.0f, 45.0f));
+	EnemyLight->SetIntensity(1200.0f);
+	EnemyLight->SetAttenuationRadius(550.0f);
+	EnemyLight->SetLightColor(FLinearColor(1.0f, 0.08f, 0.025f));
+	EnemyLight->SetCastShadows(false);
 
 	UCharacterMovementComponent* Movement = GetCharacterMovement();
 	Movement->SetUpdateNavAgentWithOwnersCollisions(false);
@@ -104,6 +113,19 @@ void ASS_Enemy::BeginPlay()
 			// box generate physical torque instead of requiring scripted rotation.
 			if (UBoxComponent* PhysicsBox = FindComponentByClass<UBoxComponent>())
 			{
+				if (bOverrideVehicleCollisionBox)
+				{
+					// Blueprint variants previously inherited a large non-uniform scale.
+					// Keep the authored extent in centimeters by normalizing the component
+					// before it is welded into the simulated rigid body.
+					PhysicsBox->SetRelativeScale3D(FVector::OneVector);
+					const FVector SafeExtent(
+						FMath::Max(VehicleCollisionBoxExtent.X, 1.0f),
+						FMath::Max(VehicleCollisionBoxExtent.Y, 1.0f),
+						FMath::Max(VehicleCollisionBoxExtent.Z, 1.0f));
+					PhysicsBox->SetBoxExtent(SafeExtent, true);
+					PhysicsBox->SetRelativeLocation(VehicleCollisionBoxOffset);
+				}
 				PhysicsBox->SetCanEverAffectNavigation(false);
 				PhysicsBox->SetSimulatePhysics(false);
 				PhysicsBox->SetCollisionProfileName(TEXT("PhysicsActor"));

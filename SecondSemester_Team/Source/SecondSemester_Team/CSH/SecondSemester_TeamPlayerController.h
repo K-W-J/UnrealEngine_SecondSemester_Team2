@@ -30,6 +30,14 @@ public:
 	UFUNCTION(BlueprintCallable, Category="CSH|UI")
 	void SetWeaponHUDVisible(bool bVisible);
 	void SetWeaponHUDInfo(const FText& Name, const FText& Description);
+	void SetSpecialWeaponHint(const FText& Hint, bool bVisible);
+
+	/** Adds points when the player successfully collects a weapon box. */
+	UFUNCTION(BlueprintCallable, Category="CSH|Point")
+	void AddWeaponBoxPoints(int32 Amount = 1);
+
+	UFUNCTION(BlueprintPure, Category="CSH|Point")
+	int32 GetWeaponBoxPointCount() const { return WeaponBoxPointCount; }
 
 	/** Shows or hides every in-game HUD element while retaining the widgets. */
 	UFUNCTION(BlueprintCallable, Category="CSH|UI")
@@ -66,6 +74,9 @@ protected:
 	bool bForceTouchControls = false;
 
 	bool bGameplayHUDVisible = true;
+
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CSH|Point", meta=(AllowPrivateAccess="true"))
+	int32 WeaponBoxPointCount = 0;
 
 	/** Gameplay initialization */
 	virtual void BeginPlay() override;

@@ -6,6 +6,7 @@ class ACSHWeaponBase;
 class UBoxComponent;
 class UStaticMeshComponent;
 class UMaterialInterface;
+class USoundBase;
 UCLASS(Blueprintable)
 class SECONDSEMESTER_TEAM_API ACSHWeaponBox : public AActor
 {
@@ -24,7 +25,12 @@ protected:
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Pickup|Random") bool bRandomWeapon = false;
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Pickup|Random", meta=(EditCondition="bRandomWeapon")) TArray<TSubclassOf<ACSHWeaponBase>> RandomWeaponClasses;
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Pickup") bool bDestroyAfterPickup = true;
+    /** Points awarded after this box successfully equips a weapon. */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Pickup", meta=(ClampMin="0")) int32 PickupPointValue = 1;
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Pickup", meta=(ClampMin="10", Units="cm")) float PickupRadius = 150.0f;
+    /** One short voice clip is chosen at random after a successful pickup. */
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Pickup|Audio") TArray<TObjectPtr<USoundBase>> PickupSounds;
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Pickup|Audio", meta=(ClampMin="0.0", ClampMax="2.0")) float PickupSoundVolume = 0.8f;
     virtual void BeginPlay() override;
     virtual void NotifyActorBeginOverlap(AActor* OtherActor) override;
     void TryPickup(AActor* OtherActor);

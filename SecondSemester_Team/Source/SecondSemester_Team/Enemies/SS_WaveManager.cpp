@@ -4,6 +4,8 @@
 #include "Enemies/SS_EnemySpawner.h"
 #include "Enemies/SS_WaveWidget.h"
 #include "CSH/SecondSemester_TeamCharacter.h"
+#include "CSH/SecondSemester_TeamPlayerController.h"
+#include "CSH/CSHEndingWidget.h"
 #include "EngineUtils.h"
 #include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
@@ -31,6 +33,11 @@ void ASS_WaveManager::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	{
 		WaveWidget->RemoveFromParent();
 		WaveWidget = nullptr;
+	}
+	if (EndingWidget)
+	{
+		EndingWidget->RemoveFromParent();
+		EndingWidget = nullptr;
 	}
 	Super::EndPlay(EndPlayReason);
 }
@@ -78,6 +85,8 @@ void ASS_WaveManager::StartWave(int32 WaveIndex)
 	}
 	CurrentWaveIndex = WaveIndex;
 	SpawnedEnemyCount = 0;
+	TotalEnemyCount = 0;
+	DefeatedEnemyCount = 0;
 	EntryIndex = 0;
 	EntrySpawnCount = 0;
 	bWaveActive = true;
@@ -86,6 +95,7 @@ void ASS_WaveManager::StartWave(int32 WaveIndex)
 		if (Entry.EnemyClass && Entry.Count > 0)
 		{
 			PendingEntries.Add(Entry);
+			TotalEnemyCount += Entry.Count;
 		}
 	}
 	EnsureWaveWidget();
@@ -96,7 +106,7 @@ void ASS_WaveManager::StartWave(int32 WaveIndex)
 			&ASS_WaveManager::BeginWaveSpawning, WaveStartDelay, false);
 		UpdateCountdownDisplay();
 		GetWorldTimerManager().SetTimer(CountdownDisplayTimer, this,
-			&ASS_WaveManager::UpdateCountdownDisplay, 1.0f, true);
+			&ASS_WaveManager::UpdateCountdownDisplay, 0.05f, true);
 		return;
 	}
 	BeginWaveSpawning();
@@ -110,7 +120,7 @@ void ASS_WaveManager::BeginWaveSpawning()
 	EnsureWaveWidget();
 	if (WaveWidget)
 	{
-		WaveWidget->SetWaveLabel(FString::Printf(TEXT("Wave %d"), CurrentWaveIndex + 1));
+		UpdateWaveProgressDisplay();
 	}
 	if (PendingEntries.IsEmpty())
 	{
@@ -132,7 +142,27 @@ void ASS_WaveManager::UpdateCountdownDisplay()
 		const int32 Seconds = FMath::Max(1, FMath::CeilToInt(TimeRemaining));
 		WaveWidget->SetWaveLabel(FString::Printf(TEXT("Wave %d  -  %d"),
 			CurrentWaveIndex + 1, Seconds));
+		WaveWidget->SetWaveProgress(WaveStartDelay > 0.0f
+			? FMath::Clamp(TimeRemaining / WaveStartDelay, 0.0f, 1.0f)
+			: 0.0f);
 	}
+}
+
+void ASS_WaveManager::UpdateWaveProgressDisplay()
+{
+	EnsureWaveWidget();
+	if (!WaveWidget)
+	{
+		return;
+	}
+
+	const int32 RemainingEnemyCount = FMath::Max(TotalEnemyCount - DefeatedEnemyCount, 0);
+	const float RemainingRatio = TotalEnemyCount > 0
+		? static_cast<float>(RemainingEnemyCount) / static_cast<float>(TotalEnemyCount)
+		: 0.0f;
+	WaveWidget->SetWaveLabel(FString::Printf(TEXT("Wave %d   %d / %d"),
+		CurrentWaveIndex + 1, RemainingEnemyCount, TotalEnemyCount));
+	WaveWidget->SetWaveProgress(RemainingRatio);
 }
 
 void ASS_WaveManager::EnsureWaveWidget()
@@ -161,11 +191,13 @@ void ASS_WaveManager::StopWave()
 	GetWorldTimerManager().ClearTimer(WaveStartTimer);
 	GetWorldTimerManager().ClearTimer(CountdownDisplayTimer);
 	GetWorldTimerManager().ClearTimer(NextWaveTimer);
+	GetWorldTimerManager().ClearTimer(BossHealthTimer);
 	bWaveActive = false;
 	bIsWaveCountdownActive = false;
 	if (WaveWidget)
 	{
 		WaveWidget->SetWaveLabel(FString());
+		WaveWidget->SetWaveProgress(0.0f);
 	}
 	for (const TWeakObjectPtr<AActor>& Enemy : LivingEnemies)
 	{
@@ -175,7 +207,14 @@ void ASS_WaveManager::StopWave()
 		}
 	}
 	LivingEnemies.Reset();
+	BossEnemies.Reset();
+	if (WaveWidget)
+	{
+		WaveWidget->SetBossHealthValues(TArray<float>());
+	}
 	AliveEnemyCount = 0;
+	TotalEnemyCount = 0;
+	DefeatedEnemyCount = 0;
 	bIsSpawningWave = false;
 	PendingEntries.Reset();
 }
@@ -202,6 +241,17 @@ void ASS_WaveManager::SpawnNextEnemy()
 			LivingEnemies.Add(Enemy);
 			AliveEnemyCount = LivingEnemies.Num();
 			Enemy->OnDestroyed.AddUniqueDynamic(this, &ASS_WaveManager::HandleEnemyDestroyed);
+			if (Enemy->bIsBossEnemy)
+			{
+				BossEnemies.Add(Enemy);
+				UpdateBossHealthDisplay();
+				if (!GetWorldTimerManager().IsTimerActive(BossHealthTimer))
+				{
+					GetWorldTimerManager().SetTimer(BossHealthTimer, this,
+						&ASS_WaveManager::UpdateBossHealthDisplay,
+						FMath::Max(BossHealthRefreshInterval, 0.02f), true);
+				}
+			}
 		}
 		if (++EntrySpawnCount >= Entry.Count)
 		{
@@ -230,7 +280,14 @@ void ASS_WaveManager::NotifyEnemyDied(AActor* Enemy)
 		return;
 	}
 	Enemy->OnDestroyed.RemoveDynamic(this, &ASS_WaveManager::HandleEnemyDestroyed);
+	++DefeatedEnemyCount;
+	BossEnemies.RemoveAll([Enemy](const TWeakObjectPtr<ASS_Enemy>& Boss)
+	{
+		return !Boss.IsValid() || Boss.Get() == Enemy;
+	});
+	UpdateBossHealthDisplay();
 	AliveEnemyCount = LivingEnemies.Num();
+	UpdateWaveProgressDisplay();
 	CheckWaveCompleted();
 }
 
@@ -250,7 +307,13 @@ void ASS_WaveManager::CheckWaveCompleted()
 		}
 	}
 	// Defer advancement to avoid recursive StartWave calls for empty waves.
-	if (WaveData.IsValidIndex(CurrentWaveIndex + 1))
+	const bool bHasNextWave = WaveData.IsValidIndex(CurrentWaveIndex + 1)
+		&& IsValid(WaveData[CurrentWaveIndex + 1]);
+	if (CurrentWaveIndex + 1 >= FMath::Max(FinalWaveNumber, 1) || !bHasNextWave)
+	{
+		ShowEndingScreen();
+	}
+	else
 	{
 		NextWaveTimer = GetWorldTimerManager().SetTimerForNextTick(
 			this, &ASS_WaveManager::StartNextWave);
@@ -260,4 +323,65 @@ void ASS_WaveManager::CheckWaveCompleted()
 void ASS_WaveManager::StartNextWave()
 {
 	StartWave(CurrentWaveIndex + 1);
+}
+
+void ASS_WaveManager::UpdateBossHealthDisplay()
+{
+	BossEnemies.RemoveAll([](const TWeakObjectPtr<ASS_Enemy>& Boss)
+	{
+		return !Boss.IsValid() || Boss->bIsDead || Boss->IsActorBeingDestroyed();
+	});
+
+	TArray<float> HealthValues;
+	HealthValues.Reserve(BossEnemies.Num());
+	for (const TWeakObjectPtr<ASS_Enemy>& Boss : BossEnemies)
+	{
+		if (Boss.IsValid())
+		{
+			HealthValues.Add(Boss->GetHealthNormalized());
+		}
+	}
+	if (WaveWidget)
+	{
+		WaveWidget->SetBossHealthValues(HealthValues);
+	}
+	if (BossEnemies.IsEmpty() && GetWorld())
+	{
+		GetWorldTimerManager().ClearTimer(BossHealthTimer);
+	}
+}
+
+void ASS_WaveManager::ShowEndingScreen()
+{
+	APlayerController* PlayerController = GetWorld() ? GetWorld()->GetFirstPlayerController() : nullptr;
+	if (!PlayerController || !PlayerController->IsLocalController())
+	{
+		return;
+	}
+
+	SetWaveUIVisible(false);
+	if (ASecondSemester_TeamPlayerController* CSHController =
+		Cast<ASecondSemester_TeamPlayerController>(PlayerController))
+	{
+		CSHController->SetGameplayHUDVisible(false);
+	}
+	if (!EndingWidget)
+	{
+		EndingWidget = CreateWidget<UCSHEndingWidget>(
+			PlayerController, UCSHEndingWidget::StaticClass());
+	}
+	if (!EndingWidget)
+	{
+		return;
+	}
+
+	EndingWidget->AddToPlayerScreen(150);
+	PlayerController->SetIgnoreMoveInput(true);
+	PlayerController->SetIgnoreLookInput(true);
+	FInputModeUIOnly InputMode;
+	InputMode.SetWidgetToFocus(EndingWidget->TakeWidget());
+	InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+	PlayerController->SetInputMode(InputMode);
+	PlayerController->SetShowMouseCursor(true);
+	UGameplayStatics::SetGamePaused(this, true);
 }

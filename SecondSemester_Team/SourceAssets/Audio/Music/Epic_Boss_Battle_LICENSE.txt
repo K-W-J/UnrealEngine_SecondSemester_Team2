@@ -1,0 +1,21 @@
+Title: Epic Boss Battle
+Author: Juhani Junkala / SubspaceAudio
+License: Creative Commons Zero v1.0 Universal (CC0 1.0)
+Attribution required: No
+
+Original source:
+https://opengameart.org/content/boss-battle-music
+
+Downloaded redistribution:
+https://github.com/jarlah/dungeon-haskell/blob/master/assets/music/boss.ogg
+
+Redistribution notes:
+The repository documents this file as a seamless-looping, dark orchestral boss
+theme transcoded from the original WAV to OGG Vorbis quality 4. Its CREDITS.md
+identifies the original title, author, source, and CC0 license.
+
+Downloaded SHA-256:
+BD57CE1EEA3D332B897342F9ABEE1BF668FA7CD54FCEBA8873806C2A80E38995
+
+License text:
+https://creativecommons.org/publicdomain/zero/1.0/

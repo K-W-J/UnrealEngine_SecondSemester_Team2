@@ -17,6 +17,8 @@
 #include "Kismet/GameplayStatics.h"
 #include "SecondSemester_Team.h"
 #include "CSHWeaponBase.h"
+#include "CSHFists.h"
+#include "CSHTowSword.h"
 #include "InputCoreTypes.h"
 #include "Enemies/SS_Enemy.h"
 #include "Enemies/SS_WaveManager.h"
@@ -25,9 +27,16 @@
 #include "CSHStartMenuWidget.h"
 #include "Blueprint/UserWidget.h"
 #include "Sound/SoundBase.h"
+#include "UObject/ConstructorHelpers.h"
 
 ASecondSemester_TeamCharacter::ASecondSemester_TeamCharacter()
 {
+	UnarmedWeaponClass = ACSHFists::StaticClass();
+	static ConstructorHelpers::FObjectFinder<USoundBase> PainScream(TEXT("/Game/Audio/FunnyVoices/SFX_Voice_PainScream.SFX_Voice_PainScream"));
+	static ConstructorHelpers::FObjectFinder<USoundBase> BattleScream(TEXT("/Game/Audio/FunnyVoices/SFX_Voice_BattleScream.SFX_Voice_BattleScream"));
+	static ConstructorHelpers::FObjectFinder<USoundBase> FightingMan(TEXT("/Game/Audio/FunnyVoices/SFX_Voice_FightingMan.SFX_Voice_FightingMan"));
+	static ConstructorHelpers::FObjectFinder<USoundBase> ClearThroat(TEXT("/Game/Audio/FunnyVoices/SFX_Voice_ClearThroat.SFX_Voice_ClearThroat"));
+	HurtSounds = { PainScream.Object, BattleScream.Object, FightingMan.Object, ClearThroat.Object };
 	PrimaryActorTick.bCanEverTick = true;
 	Health = MaxHealth;
 	Stamina = MaxStamina;
@@ -112,6 +121,8 @@ void ASecondSemester_TeamCharacter::Tick(float DeltaSeconds)
 void ASecondSemester_TeamCharacter::BeginPlay()
 {
     Super::BeginPlay();
+	EquipUnarmedWeapon();
+	Stamina = MaxStamina;
 	if (const AGameModeBase* GameMode = UGameplayStatics::GetGameMode(this))
 	{
 		if (UGameplayStatics::HasOption(GameMode->OptionsString, TEXT("SkipTitle")))
@@ -350,7 +361,6 @@ void ASecondSemester_TeamCharacter::CalcCamera(float DeltaTime, FMinimalViewInfo
 
 float ASecondSemester_TeamCharacter::TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent, AController* EventInstigator, AActor* DamageCauser)
 {
-	const bool bWasAlive = Health > 0.f && !bDeathStateEntered;
 	const float AppliedDamage = Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
 	const float FinalDamage = AppliedDamage > 0.0f ? AppliedDamage : FMath::Max(0.0f, DamageAmount);
 	Health = FMath::Clamp(Health - FinalDamage, 0.0f, MaxHealth);
@@ -360,18 +370,16 @@ float ASecondSemester_TeamCharacter::TakeDamage(float DamageAmount, FDamageEvent
 	}
 	if (FinalDamage > 0.0f)
 	{
-        if (bWasAlive && IsLocallyControlled() && GetWorld()->GetTimeSeconds() >= NextHurtSoundTime)
-        {
-            USoundBase* Sound = FinalDamage >= HeavyHurtThreshold && HeavyHurtSound ? HeavyHurtSound.Get() : HurtSound.Get();
-            if (Sound)
-            {
-                // UI sound continues through the immediate game-over pause on a fatal hit.
-                UGameplayStatics::PlaySound2D(this, Sound,
-                    FMath::Clamp(0.55f + FinalDamage / 100.f, 0.55f, 1.f),
-                    FMath::FRandRange(0.96f, 1.04f));
-                NextHurtSoundTime = GetWorld()->GetTimeSeconds() + HurtSoundCooldown;
-            }
-        }
+		TArray<USoundBase*> ValidHurtSounds;
+		for (USoundBase* Sound : HurtSounds)
+		{
+			if (Sound) ValidHurtSounds.Add(Sound);
+		}
+		if (!ValidHurtSounds.IsEmpty())
+		{
+			UGameplayStatics::PlaySound2D(this,
+				ValidHurtSounds[FMath::RandRange(0, ValidHurtSounds.Num() - 1)], HurtSoundVolume);
+		}
 		ApplyDamageCameraKick(FinalDamage, DamageCauser);
 		DamageBorderTimeRemaining = FMath::Max(DamageBorderDuration, 0.05f);
 		EnsureDamageBorderWidget();
@@ -676,13 +684,21 @@ bool ASecondSemester_TeamCharacter::EquipWeapon(TSubclassOf<ACSHWeaponBase> Weap
     {
         CSHController->SetWeaponHUDInfo(CurrentWeapon->GetWeaponDisplayName(), CurrentWeapon->GetWeaponDescription());
         CSHController->SetWeaponHUDVisible(true);
+        const bool bTowSwordEquipped = CurrentWeapon->IsA<ACSHTowSword>();
+        CSHController->SetSpecialWeaponHint(
+            FText::FromString(TEXT("R 키를 누르면 꽂은 자동차가 날아갑니다")),
+            bTowSwordEquipped);
     }
     return true;
 }
 
 void ASecondSemester_TeamCharacter::StartWeaponFire()
 {
-    if (IsValid(CurrentWeapon)) CurrentWeapon->StartFiring();
+	if (!IsValid(CurrentWeapon) && !EquipUnarmedWeapon())
+	{
+		return;
+	}
+	CurrentWeapon->StartFiring();
 }
 
 void ASecondSemester_TeamCharacter::StopWeaponFire()
@@ -693,5 +709,18 @@ void ASecondSemester_TeamCharacter::StopWeaponFire()
 void ASecondSemester_TeamCharacter::ReloadWeapon()
 {
     if (IsValid(CurrentWeapon)) CurrentWeapon->Reload();
+}
+
+bool ASecondSemester_TeamCharacter::EquipUnarmedWeapon()
+{
+	if (IsValid(CurrentWeapon))
+	{
+		return true;
+	}
+	if (UnarmedWeaponClass)
+	{
+		return EquipWeapon(UnarmedWeaponClass);
+	}
+	return EquipWeapon(ACSHFists::StaticClass());
 }
 

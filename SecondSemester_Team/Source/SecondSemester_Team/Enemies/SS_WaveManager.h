@@ -6,7 +6,9 @@
 #include "SS_WaveManager.generated.h"
 
 class ASS_EnemySpawner;
+class ASS_Enemy;
 class USS_WaveWidget;
+class UCSHEndingWidget;
 
 UCLASS(Blueprintable)
 class SECONDSEMESTER_TEAM_API ASS_WaveManager : public AActor
@@ -31,6 +33,14 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wave|Reward", meta = (ClampMin = "0.0"))
 	float WaveCompletionHealAmount = 100.0f;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wave|Boss UI",
+		meta = (ClampMin = "0.02", Units = "s"))
+	float BossHealthRefreshInterval = 0.1f;
+
+	/** Completing this numbered wave opens the ending screen. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wave|Ending", meta = (ClampMin = "1"))
+	int32 FinalWaveNumber = 10;
+
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Wave")
 	TArray<TObjectPtr<ASS_EnemySpawner>> EnemySpawners;
 
@@ -46,6 +56,14 @@ public:
 
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Wave")
 	int32 AliveEnemyCount = 0;
+
+	/** Total enemies scheduled for the current wave. */
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Wave")
+	int32 TotalEnemyCount = 0;
+
+	/** Enemies defeated during the current wave. */
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Wave")
+	int32 DefeatedEnemyCount = 0;
 
 	/** Call from death logic when an enemy leaves a corpse instead of being destroyed. */
 	UFUNCTION(BlueprintCallable, Category = "Wave")
@@ -75,15 +93,22 @@ private:
 	void StartNextWave();
 	void BeginWaveSpawning();
 	void UpdateCountdownDisplay();
+	void UpdateWaveProgressDisplay();
 	void EnsureWaveWidget();
+	void ShowEndingScreen();
+	void UpdateBossHealthDisplay();
 	void SpawnNextEnemy();
 	FTimerHandle WaveSpawnTimer;
 	FTimerHandle WaveStartTimer;
 	FTimerHandle CountdownDisplayTimer;
 	FTimerHandle NextWaveTimer;
+	FTimerHandle BossHealthTimer;
 	UPROPERTY(Transient)
 	TObjectPtr<USS_WaveWidget> WaveWidget;
+	UPROPERTY(Transient)
+	TObjectPtr<UCSHEndingWidget> EndingWidget;
 	TArray<TWeakObjectPtr<AActor>> LivingEnemies;
+	TArray<TWeakObjectPtr<ASS_Enemy>> BossEnemies;
 	bool bWaveActive = false;
 	bool bWaveUIVisible = true;
 	bool bIsWaveCountdownActive = false;
