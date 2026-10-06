@@ -447,9 +447,9 @@ float ASecondSemester_TeamCharacter::TakeDamage(float DamageAmount, FDamageEvent
 	}
 	if (FinalDamage > 0.0f)
 	{
-		if (USoundBase* HurtSound = PickRandomSound(HurtSounds))
+		if (USoundBase* SelectedHurtSound = PickRandomSound(HurtSounds))
 		{
-			UGameplayStatics::PlaySound2D(this, HurtSound, HurtSoundVolume);
+			UGameplayStatics::PlaySound2D(this, SelectedHurtSound, HurtSoundVolume);
 		}
 		ApplyDamageCameraKick(FinalDamage, DamageCauser);
 		DamageBorderTimeRemaining = FMath::Max(DamageBorderDuration, 0.05f);
