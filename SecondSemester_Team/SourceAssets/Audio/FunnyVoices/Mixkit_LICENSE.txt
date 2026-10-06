@@ -1,0 +1,24 @@
+Source: Mixkit Free Voices Sound Effects
+Source page: https://mixkit.co/free-sound-effects/voices/
+License page: https://mixkit.co/license/
+License: Mixkit Sound Effects Free License
+
+Downloaded assets and Mixkit IDs:
+- Cartoon voice laugh (343)
+- Little baby sneeze (2214)
+- Sick man sneeze (2213)
+- Happy child laughing (2265)
+- Cartoon girl saying no no no (2257)
+- Funny kid voice (2879)
+- Human fighter pain scream (2768)
+- Female cheerful laughter (416)
+- Child laughing happily (2263)
+- Battle man scream (2175)
+- Male clearing the throat (2226)
+- Fairy cartoon success voice (344)
+- Males yes victory (2012)
+- Person nasal laugh (2883)
+- Fighting man's voice (2171)
+- Females laugh (425)
+
+Downloaded on 2026-10-06. The original WAV files are kept beside this notice.

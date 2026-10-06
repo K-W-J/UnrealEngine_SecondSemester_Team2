@@ -6,12 +6,14 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/World.h"
 #include "Engine/OverlapResult.h"
+#include "Enemies/SS_Enemy.h"
 
 namespace
 {
 bool IsTowableCar(AActor* Actor)
 {
     if (!IsValid(Actor) || Actor->ActorHasTag(TEXT("CSH_Towed")) || Actor->ActorHasTag(TEXT("NoTow"))) return false;
+    if (const ASS_Enemy* Enemy = Cast<ASS_Enemy>(Actor); Enemy && Enemy->bIsBossEnemy) return false;
     if (Actor->ActorHasTag(TEXT("Towable")) || Actor->ActorHasTag(TEXT("Vehicle"))) return true;
     for (UClass* Type = Actor->GetClass(); Type; Type = Type->GetSuperClass())
         if (Type->GetName().Contains(TEXT("Vehicle"))) return true;

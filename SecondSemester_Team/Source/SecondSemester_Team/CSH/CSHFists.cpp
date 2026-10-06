@@ -6,6 +6,7 @@
 #include "Engine/World.h"
 #include "GameFramework/DamageType.h"
 #include "Kismet/GameplayStatics.h"
+#include "Materials/MaterialInterface.h"
 #include "UObject/ConstructorHelpers.h"
 
 ACSHFists::ACSHFists()
@@ -15,7 +16,7 @@ ACSHFists::ACSHFists()
     bInfiniteAmmo=true;
     MagazineCapacity=1;
     FireInterval=.45f;
-    MeleeRange=170.f;
+    MeleeRange=204.f;
     MeleeRadius=30.f;
     MeleeDamage=20.f;
     MeleeKnockback=250.f;
@@ -28,7 +29,14 @@ ACSHFists::ACSHFists()
     LeftGlove->SetRenderCustomDepth(true);
     LeftGlove->SetCustomDepthStencilValue(42);
     static ConstructorHelpers::FObjectFinder<UStaticMesh> Sphere(TEXT("/Engine/BasicShapes/Sphere.Sphere"));
+    static ConstructorHelpers::FObjectFinder<UMaterialInterface> GloveMaterial(
+        TEXT("/Game/CSH/Materials/M_CSH_FistsGlove.M_CSH_FistsGlove"));
     if (Sphere.Succeeded()) { WeaponMesh->SetStaticMesh(Sphere.Object); LeftGlove->SetStaticMesh(Sphere.Object); }
+    if (GloveMaterial.Succeeded())
+    {
+        WeaponMesh->SetMaterial(0, GloveMaterial.Object);
+        LeftGlove->SetMaterial(0, GloveMaterial.Object);
+    }
     WeaponMesh->SetRelativeScale3D(FVector(.17f,.13f,.15f));
     LeftGlove->SetRelativeScale3D(FVector(.17f,.13f,.15f));
     WeaponMesh->SetRelativeLocation(FVector(0,5,-3));
@@ -44,6 +52,7 @@ ACSHFists::ACSHFists()
         Thumb->SetCollisionEnabled(ECollisionEnabled::NoCollision);
         Thumb->SetRenderCustomDepth(true);
         Thumb->SetCustomDepthStencilValue(42);
+        if (GloveMaterial.Succeeded()) Thumb->SetMaterial(0, GloveMaterial.Object);
     }
 }
 

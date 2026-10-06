@@ -1,12 +1,14 @@
 #include "CSHWeaponBox.h"
 #include "CSHWeaponBase.h"
 #include "SecondSemester_TeamCharacter.h"
+#include "SecondSemester_TeamPlayerController.h"
 #include "Components/BoxComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "TimerManager.h"
 #include "Materials/MaterialInterface.h"
 #include "UObject/ConstructorHelpers.h"
+#include "Sound/SoundBase.h"
 ACSHWeaponBox::ACSHWeaponBox()
 {
     PrimaryActorTick.bCanEverTick = false;
@@ -26,6 +28,11 @@ ACSHWeaponBox::ACSHWeaponBox()
     PreviewWeaponGlowMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision); PreviewWeaponGlowMesh->SetCastShadow(false);
     static ConstructorHelpers::FObjectFinder<UMaterialInterface> GlowMaterial(TEXT("/Game/CSH/Materials/M_CSH_WeaponBoxWallsOnlyV2.M_CSH_WeaponBoxWallsOnlyV2"));
     if (GlowMaterial.Succeeded()) ThroughWallGlowMaterial = GlowMaterial.Object;
+    static ConstructorHelpers::FObjectFinder<USoundBase> CartoonLaugh(TEXT("/Game/Audio/FunnyVoices/SFX_Voice_CartoonLaugh.SFX_Voice_CartoonLaugh"));
+    static ConstructorHelpers::FObjectFinder<USoundBase> FunnyKid(TEXT("/Game/Audio/FunnyVoices/SFX_Voice_FunnyKid.SFX_Voice_FunnyKid"));
+    static ConstructorHelpers::FObjectFinder<USoundBase> FairySuccess(TEXT("/Game/Audio/FunnyVoices/SFX_Voice_FairySuccess.SFX_Voice_FairySuccess"));
+    static ConstructorHelpers::FObjectFinder<USoundBase> YesVictory(TEXT("/Game/Audio/FunnyVoices/SFX_Voice_YesVictory.SFX_Voice_YesVictory"));
+    PickupSounds = { CartoonLaugh.Object, FunnyKid.Object, FairySuccess.Object, YesVictory.Object };
 }
 void ACSHWeaponBox::BeginPlay()
 {
@@ -109,6 +116,21 @@ void ACSHWeaponBox::TryPickup(AActor* OtherActor)
         if (Character->EquipWeapon(SelectedClass))
         {
             GetWorldTimerManager().ClearTimer(PickupCheckTimer);
+            if (ASecondSemester_TeamPlayerController* PlayerController =
+                Cast<ASecondSemester_TeamPlayerController>(Character->GetController()))
+            {
+                PlayerController->AddWeaponBoxPoints(PickupPointValue);
+            }
+            TArray<USoundBase*> ValidSounds;
+            for (USoundBase* Sound : PickupSounds)
+            {
+                if (Sound) ValidSounds.Add(Sound);
+            }
+            if (!ValidSounds.IsEmpty())
+            {
+                UGameplayStatics::PlaySound2D(this,
+                    ValidSounds[FMath::RandRange(0, ValidSounds.Num() - 1)], PickupSoundVolume);
+            }
             if (bDestroyAfterPickup) Destroy();
         }
         else bPickupConsumed = false;

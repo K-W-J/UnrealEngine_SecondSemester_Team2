@@ -8,6 +8,7 @@ class AActor;
 class UNiagaraSystem;
 class USoundBase;
 class UAudioComponent;
+class UPointLightComponent;
 
 UCLASS(Blueprintable)
 class SECONDSEMESTER_TEAM_API ASS_Enemy : public ACharacter
@@ -38,11 +39,25 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SS Enemy Audio")
 	TObjectPtr<UAudioComponent> RandomSoundComponent;
 
+	/** Small identification light carried by every enemy vehicle. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "SS Enemy Light")
+	TObjectPtr<UPointLightComponent> EnemyLight;
+
+	/** Boss enemies receive one health bar each below the wave label. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Boss")
+	bool bIsBossEnemy = false;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Combat", meta = (ClampMin = "1.0"))
 	float MaxHealth = 100.0f;
 
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "SS Enemy Combat")
 	float CurrentHealth = 100.0f;
+
+	UFUNCTION(BlueprintPure, Category = "SS Enemy Combat")
+	float GetHealthNormalized() const
+	{
+		return MaxHealth > 0.0f ? FMath::Clamp(CurrentHealth / MaxHealth, 0.0f, 1.0f) : 0.0f;
+	}
 
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "SS Enemy Combat")
 	bool bIsDead = false;
@@ -141,6 +156,20 @@ public:
 	/** Uses the root capsule as a freely rotating rigid body instead of kinematic character movement. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Movement|Rigid Body")
 	bool bUseRigidBodyPhysics = true;
+
+	/** Applies a per-enemy Box size before it is welded into the simulated root body. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Movement|Rigid Body|Collision")
+	bool bOverrideVehicleCollisionBox = true;
+
+	/** Half-size of this vehicle's physical Box collider. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Movement|Rigid Body|Collision",
+		meta = (ClampMin = "1.0", Units = "cm"))
+	FVector VehicleCollisionBoxExtent = FVector(220.0f, 100.0f, 70.0f);
+
+	/** Box center relative to the actor root. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Movement|Rigid Body|Collision",
+		meta = (Units = "cm"))
+	FVector VehicleCollisionBoxOffset = FVector(0.0f, 0.0f, 55.0f);
 
 	/** Linear damping applied by Chaos to the physical capsule. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Movement|Rigid Body", meta = (ClampMin = "0.0"))
@@ -248,7 +277,7 @@ public:
 	/** Seconds the car may remain within StuckMovementTolerance before recovery. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Movement|Stuck Recovery",
 		meta = (ClampMin = "0.5", Units = "s"))
-	float StuckTeleportDelay = 5.0f;
+	float StuckTeleportDelay = 3.0f;
 
 	/** Minimum planar movement that resets the stuck timer. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Movement|Stuck Recovery",
@@ -258,7 +287,7 @@ public:
 	/** Maximum radius searched for a safe NavMesh teleport destination. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Movement|Stuck Recovery",
 		meta = (ClampMin = "100.0", Units = "cm"))
-	float StuckTeleportSearchRadius = 4000.0f;
+	float StuckTeleportSearchRadius = 7000.0f;
 
 	/** Prevents recovery from selecting almost the same blocked position. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Movement|Stuck Recovery",

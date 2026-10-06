@@ -14,11 +14,13 @@ class USceneComponent;
 class USpringArmComponent;
 class UInputAction;
 class ACSHWeaponBase;
+class ACSHFists;
 class ASS_Enemy;
 class UCSHDamageBorderWidget;
 class UCSHGameOverWidget;
 class UCSHStartMenuWidget;
 class ACameraActor;
+class USoundBase;
 struct FInputActionValue;
 
 DECLARE_LOG_CATEGORY_EXTERN(LogTemplateCharacter, Log, All);
@@ -121,11 +123,22 @@ public:
 	UPROPERTY(Transient, VisibleInstanceOnly, BlueprintReadOnly, Category="Player|Damage Border")
 	TObjectPtr<UCSHDamageBorderWidget> DamageBorderWidget;
 
+	/** Short voice reactions played randomly whenever actual damage is received. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Player|Damage Audio")
+	TArray<TObjectPtr<USoundBase>> HurtSounds;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Player|Damage Audio", meta=(ClampMin="0.0", ClampMax="2.0"))
+	float HurtSoundVolume = 0.75f;
+
 	UFUNCTION(BlueprintCallable, Category="Player|Health")
 	void Heal(float HealAmount);
 
 	UFUNCTION(BlueprintCallable, Category="Weapon")
 	bool EquipWeapon(TSubclassOf<ACSHWeaponBase> WeaponClass);
+
+	/** Weapon used automatically whenever the player has no equipped weapon. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Weapon")
+	TSubclassOf<ACSHWeaponBase> UnarmedWeaponClass;
 
     UFUNCTION(BlueprintCallable, Category="Player|Camera")
     void ApplyExplosionCameraShake(const FVector& ExplosionLocation, float InnerRadius, float OuterRadius);
@@ -169,6 +182,7 @@ protected:
 	void StartWeaponFire();
 	void StopWeaponFire();
 	void ReloadWeapon();
+	bool EquipUnarmedWeapon();
 	void StartSprint();
 	void StopSprint();
 	void UpdateSprint(float DeltaSeconds);
@@ -215,9 +229,9 @@ public:
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="Player|Health")
 	float Health = 100.0f;
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Player|Stamina", meta=(ClampMin="1"))
-	float MaxStamina = 100.0f;
+	float MaxStamina = 150.0f;
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="Player|Stamina")
-	float Stamina = 100.0f;
+	float Stamina = 150.0f;
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Player|Movement", meta=(ClampMin="0", Units="cm/s"))
 	float CSHWalkSpeed = 500.0f;
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Player|Movement", meta=(ClampMin="0", Units="cm/s"))

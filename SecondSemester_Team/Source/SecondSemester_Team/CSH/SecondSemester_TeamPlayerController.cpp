@@ -4,6 +4,7 @@
 #include "SecondSemester_TeamPlayerController.h"
 #include "CSHCrosshairWidget.h"
 #include "CSHMainUIWidget.h"
+#include "CSHScoreSaveGame.h"
 #include "EnhancedInputSubsystems.h"
 #include "Engine/LocalPlayer.h"
 #include "InputMappingContext.h"
@@ -32,6 +33,28 @@ void ASecondSemester_TeamPlayerController::SetWeaponHUDInfo(const FText& Name, c
     {
         MainUIWidget->SetWeaponInfo(Name, Description);
     }
+}
+
+void ASecondSemester_TeamPlayerController::SetSpecialWeaponHint(const FText& Hint, bool bVisible)
+{
+	if (MainUIWidget)
+	{
+		MainUIWidget->SetSpecialWeaponHint(Hint, bVisible);
+	}
+}
+
+void ASecondSemester_TeamPlayerController::AddWeaponBoxPoints(int32 Amount)
+{
+	if (Amount <= 0)
+	{
+		return;
+	}
+	WeaponBoxPointCount += Amount;
+	UCSHScoreSaveGame::SaveIfHigher(WeaponBoxPointCount);
+	if (MainUIWidget)
+	{
+		MainUIWidget->SetPointCount(WeaponBoxPointCount);
+	}
 }
 
 void ASecondSemester_TeamPlayerController::SetGameplayHUDVisible(bool bVisible)
@@ -77,6 +100,7 @@ void ASecondSemester_TeamPlayerController::BeginPlay()
 			MainUIWidget = CreateWidget<UCSHMainUIWidget>(this, LoadedMainUIClass);
 			if (MainUIWidget)
 			{
+				MainUIWidget->SetPointCount(WeaponBoxPointCount);
 				MainUIWidget->AddToPlayerScreen(9);
 				MainUIWidget->SetVisibility(bGameplayHUDVisible
 					? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
