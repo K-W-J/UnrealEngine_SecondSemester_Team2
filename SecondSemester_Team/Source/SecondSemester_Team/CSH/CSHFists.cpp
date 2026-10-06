@@ -41,7 +41,6 @@ ACSHFists::ACSHFists()
     LeftGlove->SetRelativeScale3D(FVector(.17f,.13f,.15f));
     WeaponMesh->SetRelativeLocation(FVector(0,5,-3));
     LeftGlove->SetRelativeLocation(FVector(0,-29,-3));
-    // Simple glove silhouette with a thumb on each hand; replace meshes in the BP if desired.
     for (int32 Index=0; Index<2; ++Index)
     {
         UStaticMeshComponent* Thumb=CreateDefaultSubobject<UStaticMeshComponent>(Index==0 ? TEXT("RightThumb") : TEXT("LeftThumb"));

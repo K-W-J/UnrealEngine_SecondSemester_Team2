@@ -306,7 +306,6 @@ void ASS_WaveManager::CheckWaveCompleted()
 			Player->Heal(WaveCompletionHealAmount);
 		}
 	}
-	// Defer advancement to avoid recursive StartWave calls for empty waves.
 	const bool bHasNextWave = WaveData.IsValidIndex(CurrentWaveIndex + 1)
 		&& IsValid(WaveData[CurrentWaveIndex + 1]);
 	if (CurrentWaveIndex + 1 >= FMath::Max(FinalWaveNumber, 1) || !bHasNextWave)

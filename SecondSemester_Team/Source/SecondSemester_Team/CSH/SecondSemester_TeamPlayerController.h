@@ -32,7 +32,6 @@ public:
 	void SetWeaponHUDInfo(const FText& Name, const FText& Description);
 	void SetSpecialWeaponHint(const FText& Hint, bool bVisible);
 
-	/** Adds points when the player successfully collects a weapon box. */
 	UFUNCTION(BlueprintCallable, Category="CSH|Point")
 	void AddWeaponBoxPoints(int32 Amount = 1);
 
@@ -77,13 +76,19 @@ protected:
 
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="CSH|Point", meta=(AllowPrivateAccess="true"))
 	int32 WeaponBoxPointCount = 0;
+	int32 HighestPointCount = 0;
+	bool bHighScoreDirty = false;
+	FTimerHandle HighScoreSaveTimer;
 
 	/** Gameplay initialization */
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 	/** Input mapping context setup */
 	virtual void SetupInputComponent() override;
 
 	/** Returns true if the player should use UMG touch controls */
 	bool ShouldUseTouchControls() const;
+	void QueueHighScoreSave();
+	void FlushHighScoreSave();
 };

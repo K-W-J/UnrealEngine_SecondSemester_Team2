@@ -18,18 +18,15 @@ class SECONDSEMESTER_TEAM_API ASS_WaveManager : public AActor
 public:
 	ASS_WaveManager();
 
-	/** Array order is the wave order. StartWave uses a zero-based index. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wave")
 	TArray<TObjectPtr<USS_WaveData>> WaveData;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wave")
 	bool bStartFirstWaveOnBeginPlay = true;
 
-	/** Countdown before every wave, including the first one. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wave|UI", meta = (ClampMin = "0.0"))
 	float WaveStartDelay = 3.0f;
 
-	/** Health restored to the player after all enemies in a wave have been defeated. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wave|Reward", meta = (ClampMin = "0.0"))
 	float WaveCompletionHealAmount = 100.0f;
 
@@ -37,7 +34,6 @@ public:
 		meta = (ClampMin = "0.02", Units = "s"))
 	float BossHealthRefreshInterval = 0.1f;
 
-	/** Completing this numbered wave opens the ending screen. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wave|Ending", meta = (ClampMin = "1"))
 	int32 FinalWaveNumber = 10;
 
@@ -47,7 +43,6 @@ public:
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Wave")
 	int32 CurrentWaveIndex = INDEX_NONE;
 
-	/** Counts successful spawns, not living enemies. */
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Wave")
 	int32 SpawnedEnemyCount = 0;
 
@@ -57,15 +52,12 @@ public:
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Wave")
 	int32 AliveEnemyCount = 0;
 
-	/** Total enemies scheduled for the current wave. */
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Wave")
 	int32 TotalEnemyCount = 0;
 
-	/** Enemies defeated during the current wave. */
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Wave")
 	int32 DefeatedEnemyCount = 0;
 
-	/** Call from death logic when an enemy leaves a corpse instead of being destroyed. */
 	UFUNCTION(BlueprintCallable, Category = "Wave")
 	void NotifyEnemyDied(AActor* Enemy);
 
@@ -78,7 +70,6 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Wave|UI")
 	void SetWaveUIVisible(bool bVisible);
 
-	/** Stops pending spawns; already spawned enemies are left alive. */
 	UFUNCTION(BlueprintCallable, Category = "Wave")
 	void StopWave();
 

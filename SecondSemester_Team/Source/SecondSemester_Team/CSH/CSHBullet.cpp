@@ -65,7 +65,6 @@ void ACSHBullet::BeginPlay()
     {
         ProjectileMovement->bRotationFollowsVelocity = false;
         SetActorTickEnabled(true);
-        // Velocity was initialized first, so random orientation does not change the aim.
         SetActorRotation(FRotator(FMath::FRandRange(-180.f, 180.f),
             FMath::FRandRange(-180.f, 180.f), FMath::FRandRange(-180.f, 180.f)));
     }
@@ -110,7 +109,6 @@ void ACSHBullet::OnBulletHit(UPrimitiveComponent*, AActor* OtherActor, UPrimitiv
     FVector, const FHitResult& Hit)
 {
     if (!IsValid(OtherActor) || OtherActor == this || OtherActor == GetOwner() || OtherActor == GetInstigator()) return;
-    // Physical projectiles remain until their lifespan expires. Damage each target only once.
     const bool bBounceOnImpact = ProjectileMovement->bShouldBounce && !bExplosive;
     if (bBounceOnImpact)
     {

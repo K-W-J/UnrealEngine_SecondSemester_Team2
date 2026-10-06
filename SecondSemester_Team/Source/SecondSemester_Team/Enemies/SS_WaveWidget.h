@@ -8,7 +8,6 @@ class UTextBlock;
 class UProgressBar;
 class UVerticalBox;
 
-/** One top-centred text label shared by the wave countdown and wave number. */
 UCLASS()
 class SECONDSEMESTER_TEAM_API USS_WaveWidget : public UUserWidget
 {

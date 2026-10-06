@@ -1,5 +1,6 @@
 #include "CSHRandomBoxSpawner.h"
 #include "CSHWeaponBox.h"
+#include "CSHWeaponBase.h"
 #include "Components/SceneComponent.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
@@ -14,7 +15,6 @@ ACSHRandomBoxSpawner::ACSHRandomBoxSpawner()
 void ACSHRandomBoxSpawner::BeginPlay()
 {
     Super::BeginPlay();
-    // Only one manager should own the random-box population in this level.
     for (TActorIterator<ACSHRandomBoxSpawner> It(GetWorld()); It; ++It)
     {
         if (*It != this && It->HasActorBegunPlay() && !It->bStopping)
@@ -41,7 +41,6 @@ void ACSHRandomBoxSpawner::SpawnNextBox()
     TArray<AActor*> Candidates;
     for (const auto& Point : BoxPoints)
         if (IsValid(Point) && Point != LastPoint.Get()) Candidates.AddUnique(Point);
-    // One valid point cannot satisfy "a different point". Do not loop pickups in place.
     if (Candidates.IsEmpty()) return;
     AActor* Point = Candidates[FMath::RandRange(0, Candidates.Num() - 1)];
     LastPoint = Point;
@@ -54,7 +53,7 @@ void ACSHRandomBoxSpawner::SpawnNextBox()
         GetWorldTimerManager().SetTimer(RespawnTimer, this, &ACSHRandomBoxSpawner::SpawnNextBox, 1.f, false);
         return;
     }
-    // Bind before BeginPlay: the box may be collected immediately when spawned near the player.
+    ActiveBox->SetPreviousRandomWeapon(LastWeaponClass);
     ActiveBox->OnDestroyed.AddDynamic(this, &ACSHRandomBoxSpawner::OnBoxDestroyed);
     ActiveBox->FinishSpawning(Transform);
 }
@@ -62,6 +61,10 @@ void ACSHRandomBoxSpawner::SpawnNextBox()
 void ACSHRandomBoxSpawner::OnBoxDestroyed(AActor* DestroyedActor)
 {
     if (DestroyedActor != ActiveBox) return;
+    if (ActiveBox->GetSelectedWeaponClass())
+    {
+        LastWeaponClass = ActiveBox->GetSelectedWeaponClass();
+    }
     ActiveBox = nullptr;
     if (!bStopping)
         GetWorldTimerManager().SetTimer(RespawnTimer, this, &ACSHRandomBoxSpawner::SpawnNextBox,

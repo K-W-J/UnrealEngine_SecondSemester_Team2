@@ -61,7 +61,6 @@ void ACSHTowedCar::Throw(const FVector& Start, const FVector& Direction, float S
 {
     if (!IsValid(Target)) { Destroy(); return; }
     DetachFromActor(FDetachmentTransformRules::KeepWorldTransform);
-    // Start at the held position and sweep the first advance too: never teleport through a wall.
     Target->SetActorScale3D(OriginalScale);
     Velocity = Direction * FMath::Max(1.f, Speed);
     DamageAmount = Damage;

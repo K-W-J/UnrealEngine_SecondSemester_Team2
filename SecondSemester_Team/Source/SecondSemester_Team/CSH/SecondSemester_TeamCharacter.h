@@ -20,28 +20,24 @@ class UCSHDamageBorderWidget;
 class UCSHGameOverWidget;
 class UCSHStartMenuWidget;
 class ACameraActor;
+class ASS_WaveManager;
 class USoundBase;
+class UMeshComponent;
 struct FInputActionValue;
 
 DECLARE_LOG_CATEGORY_EXTERN(LogTemplateCharacter, Log, All);
 
-/**
- *  A basic first person character
- */
 UCLASS(abstract)
 class ASecondSemester_TeamCharacter : public ACharacter
 {
 	GENERATED_BODY()
 
-	/** Pawn mesh: first person view (arms; seen only by self) */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components", meta = (AllowPrivateAccess = "true"))
 	USkeletalMeshComponent* FirstPersonMesh;
 
-	/** First person camera */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components", meta = (AllowPrivateAccess = "true"))
 	UCameraComponent* FirstPersonCameraComponent;
 
-	/** Camera-relative attachment point for the currently equipped weapon. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components", meta = (AllowPrivateAccess = "true"))
 	USceneComponent* WeaponSocket;
 
@@ -53,19 +49,15 @@ class ASecondSemester_TeamCharacter : public ACharacter
 
 protected:
 
-	/** Jump Input Action */
 	UPROPERTY(EditAnywhere, Category ="Input")
 	UInputAction* JumpAction;
 
-	/** Move Input Action */
 	UPROPERTY(EditAnywhere, Category ="Input")
 	UInputAction* MoveAction;
 
-	/** Look Input Action */
 	UPROPERTY(EditAnywhere, Category ="Input")
 	class UInputAction* LookAction;
 
-	/** Mouse Look Input Action */
 	UPROPERTY(EditAnywhere, Category ="Input")
 	class UInputAction* MouseLookAction;
 	
@@ -78,17 +70,13 @@ public:
 	void UpdateBodyVisibility(bool bFirstPerson);
 	virtual float TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, AController* EventInstigator, AActor* DamageCauser) override;
 
-	/** Launches the player away from an enemy car when the two collide. */
 	void ApplyEnemyCarImpact(ASS_Enemy* Enemy);
 
-	/** Returns from the title camera to the player camera. */
 	void FinishTitleScreen();
 
-	/** Horizontal launch speed produced by a car moving at EnemyImpactReferenceSpeed. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Player|Enemy Impact", meta=(ClampMin="0", Units="cm/s", DisplayName="Horizontal Launch at Reference Speed"))
 	float EnemyImpactHorizontalSpeed = 1100.0f;
 
-	/** Upward launch speed produced by a car moving at EnemyImpactReferenceSpeed. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Player|Enemy Impact", meta=(ClampMin="0", Units="cm/s", DisplayName="Upward Launch at Reference Speed"))
 	float EnemyImpactUpwardSpeed = 350.0f;
 
@@ -104,7 +92,6 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Player|Enemy Impact", meta=(ClampMin="0", Units="s"))
 	float EnemyImpactCooldown = 0.5f;
 
-	/** Damage for each 100 cm/s of closing speed when an enemy car hits the player. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Player|Enemy Impact", meta=(ClampMin="0"))
 	float EnemyImpactDamagePer100Speed = 2.0f;
 
@@ -123,7 +110,6 @@ public:
 	UPROPERTY(Transient, VisibleInstanceOnly, BlueprintReadOnly, Category="Player|Damage Border")
 	TObjectPtr<UCSHDamageBorderWidget> DamageBorderWidget;
 
-	/** Short voice reactions played randomly whenever actual damage is received. */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Player|Damage Audio")
 	TArray<TObjectPtr<USoundBase>> HurtSounds;
 
@@ -136,7 +122,15 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Weapon")
 	bool EquipWeapon(TSubclassOf<ACSHWeaponBase> WeaponClass);
 
-	/** Weapon used automatically whenever the player has no equipped weapon. */
+	UFUNCTION(Exec, BlueprintCallable, Category="Cheat")
+	void CheatKillAllEnemies();
+
+	UFUNCTION(Exec, BlueprintCallable, Category="Cheat")
+	void CheatEquipRandomWeapon();
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Cheat")
+	TArray<TSoftClassPtr<ACSHWeaponBase>> CheatWeaponClasses;
+
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Weapon")
 	TSubclassOf<ACSHWeaponBase> UnarmedWeaponClass;
 
@@ -152,31 +146,24 @@ protected:
 		UPrimitiveComponent* OtherComponent, FVector NormalImpulse, const FHitResult& Hit);
 
 
-	/** Called from Input Actions for movement input */
 	void MoveInput(const FInputActionValue& Value);
 
-	/** Called from Input Actions for looking input */
 	void LookInput(const FInputActionValue& Value);
 
-	/** Handles aim inputs from either controls or UI interfaces */
 	UFUNCTION(BlueprintCallable, Category="Input")
 	virtual void DoAim(float Yaw, float Pitch);
 
-	/** Handles move inputs from either controls or UI interfaces */
 	UFUNCTION(BlueprintCallable, Category="Input")
 	virtual void DoMove(float Right, float Forward);
 
-	/** Handles jump start inputs from either controls or UI interfaces */
 	UFUNCTION(BlueprintCallable, Category="Input")
 	virtual void DoJumpStart();
 
-	/** Handles jump end inputs from either controls or UI interfaces */
 	UFUNCTION(BlueprintCallable, Category="Input")
 	virtual void DoJumpEnd();
 
 protected:
 
-	/** Set up input action bindings */
 	virtual void SetupPlayerInputComponent(UInputComponent* InputComponent) override;
 
 	void StartWeaponFire();
@@ -202,17 +189,16 @@ protected:
     float NextHurtSoundTime = -1.f;
 	void DebugHeal();
 	void EnterDeathState();
+	void CacheBodyMeshes();
+	ASS_WaveManager* GetWaveManager();
 	
 
 public:
 
-	/** Returns the first person mesh **/
 	USkeletalMeshComponent* GetFirstPersonMesh() const { return FirstPersonMesh; }
 
-	/** Returns first person camera component **/
 	UCameraComponent* GetFirstPersonCameraComponent() const { return FirstPersonCameraComponent; }
 
-	/** Returns the camera-relative weapon attachment point. */
 	USceneComponent* GetWeaponSocketComponent() const { return WeaponSocket; }
 
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category="Weapon")
@@ -264,6 +250,14 @@ private:
 	float TimeSinceSprintStopped = 0.0f;
 	FRotator DamageCameraKick = FRotator::ZeroRotator;
 	bool bDeathStateEntered = false;
+	bool bBodyVisibilityInitialized = false;
+	bool bBodyHiddenForFirstPerson = false;
+
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UMeshComponent>> CachedBodyMeshes;
+
+	UPROPERTY(Transient)
+	TObjectPtr<ASS_WaveManager> CachedWaveManager;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UCSHGameOverWidget> GameOverWidget;

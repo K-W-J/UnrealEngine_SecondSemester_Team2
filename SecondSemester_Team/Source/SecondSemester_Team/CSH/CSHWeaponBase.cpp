@@ -3,7 +3,6 @@
 #include "SecondSemester_TeamCharacter.h"
 #include "Camera/CameraComponent.h"
 #include "Components/SceneComponent.h"
-#include "Components/AudioComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/World.h"
 #include "GameFramework/Character.h"
@@ -26,9 +25,6 @@ ACSHWeaponBase::ACSHWeaponBase()
     WeaponMesh->SetCustomDepthStencilValue(42);
     WeaponMesh->SetOwnerNoSee(false);
     MuzzlePoint = CreateDefaultSubobject<USceneComponent>(TEXT("MuzzlePoint")); MuzzlePoint->SetupAttachment(RecoilRoot);
-    FireLoopAudio = CreateDefaultSubobject<UAudioComponent>(TEXT("FireLoopAudio"));
-    FireLoopAudio->SetupAttachment(MuzzlePoint);
-    FireLoopAudio->bAutoActivate = false;
 }
 void ACSHWeaponBase::Tick(float DeltaSeconds)
 {
@@ -54,38 +50,7 @@ void ACSHWeaponBase::StartFiring()
     bTriggerHeld = true; FireOnce();
     if (bAutomatic) GetWorldTimerManager().SetTimer(FireTimer, this, &ACSHWeaponBase::FireOnce, FireInterval, true, FireInterval);
 }
-void ACSHWeaponBase::StopFiring()
-{
-    bTriggerHeld = false;
-    GetWorldTimerManager().ClearTimer(FireTimer);
-    if (bLoopAudioActive) FireLoopAudio->FadeOut(0.035f, 0.f);
-    bLoopAudioActive = false;
-}
-void ACSHWeaponBase::EndPlay(const EEndPlayReason::Type Reason)
-{
-    StopFiring();
-    FireLoopAudio->Stop();
-    Super::EndPlay(Reason);
-}
-void ACSHWeaponBase::PlayFireAudio(const FVector& Location)
-{
-    if (!FireSound || !GetWorld()) return;
-    if (bLoopFireSound)
-    {
-        if (!bLoopAudioActive)
-        {
-            FireLoopAudio->SetSound(FireSound);
-            FireLoopAudio->SetVolumeMultiplier(FireSoundVolume);
-            FireLoopAudio->FadeIn(0.025f);
-            bLoopAudioActive = true;
-        }
-        return;
-    }
-    if (GetWorld()->GetTimeSeconds() < NextFireAudioTime) return;
-    NextFireAudioTime = GetWorld()->GetTimeSeconds() + FireSoundMinInterval;
-    UGameplayStatics::PlaySoundAtLocation(this, FireSound, Location,
-        FireSoundVolume, FMath::FRandRange(0.96f, 1.04f));
-}
+void ACSHWeaponBase::StopFiring() { bTriggerHeld = false; GetWorldTimerManager().ClearTimer(FireTimer); }
 void ACSHWeaponBase::Reload()
 {
     if (bInfiniteAmmo || CurrentAmmo >= MagazineCapacity || ReserveAmmo <= 0) return;
@@ -96,7 +61,7 @@ void ACSHWeaponBase::Reload()
 }
 void ACSHWeaponBase::FireOnce()
 {
-    if (!bTriggerHeld || !IsValid(CharacterOwner) || CharacterOwner->GetHealth() <= 0.f || (!BulletClass && !bMeleeWeapon)) { StopFiring(); return; }
+    if (!bTriggerHeld || !IsValid(CharacterOwner) || (!BulletClass && !bMeleeWeapon)) return;
     if (!bInfiniteAmmo && CurrentAmmo <= 0) { StopFiring(); return; }
     if (!bInfiniteAmmo) --CurrentAmmo;
     NextAllowedFireTime = GetWorld()->GetTimeSeconds() + FireInterval;
@@ -122,8 +87,6 @@ void ACSHWeaponBase::FireOnce()
             }
             if (ACharacter* HitCharacter = Cast<ACharacter>(Target)) HitCharacter->LaunchCharacter(Direction * MeleeKnockback, true, true);
         }
-        // Melee weapons lunge forward, then Tick smoothly restores the resting position.
-        PlayFireAudio(Start);
         RecoilOffset.X = FMath::Min(RecoilOffset.X + WeaponKickDistance, WeaponKickDistance * 1.5f);
         BP_OnFired();
         if (!bAutomatic) StopFiring();
@@ -155,7 +118,6 @@ void ACSHWeaponBase::FireOnce()
         FVector ShotDirection = CenterDirection;
         if (ProjectilesPerShot > 1 && SpreadRadians > 0.0f)
         {
-            // Realistic buckshot pattern: random each shot, concentrated near the center.
             const float Radius = FMath::Square(FMath::FRand());
             const float Azimuth = FMath::FRandRange(0.0f, 2.0f * PI);
             const FVector RadialDirection = SpreadRight * FMath::Cos(Azimuth) + SpreadUp * FMath::Sin(Azimuth);
@@ -181,7 +143,7 @@ void ACSHWeaponBase::FireOnce()
             EAttachLocation::SnapToTargetIncludingScale,
             true);
     }
-    PlayFireAudio(MuzzleLoc);
+    if (FireSound) UGameplayStatics::PlaySoundAtLocation(this, FireSound, MuzzleLoc);
     RecoilOffset.X = FMath::Max(RecoilOffset.X - WeaponKickDistance, -WeaponKickDistance * 1.5f);
     CharacterOwner->AddControllerPitchInput(-CameraPitchKick);
     CharacterOwner->AddControllerYawInput(FMath::FRandRange(-CameraYawKick, CameraYawKick));

@@ -109,15 +109,10 @@ void ASS_Enemy::BeginPlay()
 			Capsule->SetSimulatePhysics(true);
 			Capsule->WakeAllRigidBodies();
 
-			// Weld the Blueprint box into the simulated root body so impacts on the
-			// box generate physical torque instead of requiring scripted rotation.
 			if (UBoxComponent* PhysicsBox = FindComponentByClass<UBoxComponent>())
 			{
 				if (bOverrideVehicleCollisionBox)
 				{
-					// Blueprint variants previously inherited a large non-uniform scale.
-					// Keep the authored extent in centimeters by normalizing the component
-					// before it is welded into the simulated rigid body.
 					PhysicsBox->SetRelativeScale3D(FVector::OneVector);
 					const FVector SafeExtent(
 						FMath::Max(VehicleCollisionBoxExtent.X, 1.0f),
@@ -245,9 +240,6 @@ bool ASS_Enemy::UpdateStuckTeleport(float DeltaTime)
 	const bool bTargetIsFarEnough = FVector::DistSquared2D(
 		GetActorLocation(), FollowTarget->GetActorLocation()) >
 		FMath::Square(TargetAcceptanceRadius + StuckMovementTolerance);
-	// Count every distant target as driving intent. Requiring a valid path here would
-	// exclude exactly the failure case this recovery handles: path generation failed
-	// while the car is wedged against geometry.
 	const bool bTryingToDrive = bTargetIsFarEnough
 		&& FollowSpeed > UE_SMALL_NUMBER && MaxMovementForce > UE_SMALL_NUMBER;
 	if (!bTryingToDrive)
@@ -273,7 +265,6 @@ bool ASS_Enemy::UpdateStuckTeleport(float DeltaTime)
 
 	if (!TeleportToNearbyNavigation())
 	{
-		// Retry soon, without running the expensive NavMesh search every frame.
 		StuckElapsedTime = FMath::Max(StuckTeleportDelay - 1.0f, 0.0f);
 		return false;
 	}
@@ -387,7 +378,6 @@ bool ASS_Enemy::TeleportToNearbyNavigation()
 
 void ASS_Enemy::UpdateNavigationRecovery()
 {
-	// Saved-point recovery is no longer used; off-mesh cars pursue the player.
 	bReturningToNavigation = false;
 	UNavigationSystemV1* NavSystem = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld());
 	UCharacterMovementComponent* Movement = GetCharacterMovement();
@@ -402,7 +392,6 @@ void ASS_Enemy::UpdateNavigationRecovery()
 	}
 	const FVector FeetLocation = GetActorLocation() - FVector::UpVector * GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
 	FNavLocation ProjectedPoint;
-	// A narrow XY query avoids treating a nearby road as the surface under the car.
 	const bool bOnNavigation = NavSystem->ProjectPointToNavigation(
 		FeetLocation, ProjectedPoint, FVector(25.0f, 25.0f, 100.0f), NavData)
 		&& FVector::DistSquared2D(FeetLocation, ProjectedPoint.Location) <= FMath::Square(25.0f);
@@ -426,7 +415,6 @@ void ASS_Enemy::ApplyNavigationRecoveryForce()
 	const bool bPhysics = bUseRigidBodyPhysics && Capsule->IsSimulatingPhysics();
 	FVector Velocity = bPhysics ? Capsule->GetPhysicsLinearVelocity() : Movement->Velocity;
 	Velocity.Z = 0.0f;
-	// Slow near the saved point and counter outward inertia without teleporting.
 	const FVector DesiredVelocity = Offset.GetSafeNormal() * FMath::Min(RecoverySpeed, Offset.Size() * 2.0f);
 	const FVector Acceleration = ((DesiredVelocity - Velocity) * 4.0f).GetClampedToMaxSize(MaxMovementForce);
 	if (bPhysics)
@@ -494,7 +482,6 @@ void ASS_Enemy::HandleCarHit(AActor* SelfActor, AActor* OtherActor, FVector Norm
 		GetRecentDriveVelocity() - OtherCar->GetRecentDriveVelocity(), ToOther);
 	const float ClosingSpeed = FMath::Max(0.0f,
 		FMath::Max(CurrentClosingSpeed, RecentClosingSpeed));
-	// Damage both cars; cooldown prevents duplicate callbacks from doubling damage.
 	ApplyCollisionDamage(Hit.ImpactPoint, ClosingSpeed);
 	if (IsValid(OtherCar))
 	{
@@ -775,8 +762,6 @@ void ASS_Enemy::ApplyPathFollowingForce(float DeltaTime)
 	FVector SteeringTarget = FollowTarget->GetActorLocation();
 	if (!bDirectlyFollowingOffNavTarget)
 	{
-		// Pure-pursuit style steering: aim farther along the path instead of being pulled
-		// toward the first point, which is usually generated immediately in front of the car.
 		SteeringTarget = NavigationPoints[CurrentPathPointIndex];
 		float RemainingLookAhead = FMath::Max(PathSteeringLookAheadDistance, 0.0f);
 		FVector SegmentStart = ActorLocation;

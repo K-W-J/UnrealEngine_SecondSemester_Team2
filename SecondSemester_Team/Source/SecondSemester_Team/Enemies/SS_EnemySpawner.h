@@ -16,19 +16,15 @@ class SECONDSEMESTER_TEAM_API ASS_EnemySpawner : public AActor
 public:
 	ASS_EnemySpawner();
 
-	/** Enemy class spawned at this actor's transform. Set this to BP_SS_Enemy to keep its car meshes. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Spawner")
 	TSubclassOf<ASS_Enemy> EnemyClass;
 
-	/** Seconds between enemy spawns. Set to zero to disable repeated spawning. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Spawner", meta = (ClampMin = "0.0", Units = "s"))
 	float SpawnInterval = 5.0f;
 
-	/** Spawns one enemy as soon as play begins, before the repeating timer starts. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Spawner")
 	bool bSpawnImmediately = true;
 
-	/** Spawns one enemy at the spawner's current location and rotation. */
 	UFUNCTION(BlueprintCallable, Category = "SS Enemy Spawner")
 	void SpawnEnemy();
 
