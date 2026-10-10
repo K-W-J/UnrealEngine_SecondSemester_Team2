@@ -84,9 +84,9 @@ TSharedRef<SWidget> UCSHPauseMenuWidget::RebuildWidget()
 			ButtonSlot->SetSize(FSlateChildSize(ESlateSizeRule::Fill));
 		};
 
-		AddButton(TEXT("ContinueButton"), TEXT("계속 플레이"), 0);
-		AddButton(TEXT("TitleButton"), TEXT("타이틀로 가기"), 1);
-		AddButton(TEXT("QuitButton"), TEXT("나가기"), 2);
+		AddButton(TEXT("ContinueButton"), TEXT("CONTINUE"), 0);
+		AddButton(TEXT("TitleButton"), TEXT("RETURN TO TITLE"), 1);
+		AddButton(TEXT("QuitButton"), TEXT("QUIT GAME"), 2);
 	}
 
 	return Super::RebuildWidget();

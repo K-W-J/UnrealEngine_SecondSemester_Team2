@@ -224,8 +224,48 @@ void ASS_Enemy::Tick(float DeltaTime)
 	{
 		RebuildNavigationPath();
 	}
+	if (UpdateDirectPursuitTeleport(DeltaTime))
+	{
+		return;
+	}
 
 	ApplyPathFollowingForce(DeltaTime);
+}
+
+bool ASS_Enemy::UpdateDirectPursuitTeleport(float DeltaTime)
+{
+	const bool bStillPursuing = bDirectlyFollowingOffNavTarget && IsValid(FollowTarget)
+		&& FVector::DistSquared2D(GetActorLocation(), FollowTarget->GetActorLocation())
+			> FMath::Square(FMath::Max(TargetAcceptanceRadius, 1.0f));
+	if (!bStillPursuing)
+	{
+		DirectPursuitElapsedTime = 0.0f;
+		return false;
+	}
+
+	DirectPursuitElapsedTime += DeltaTime;
+	if (DirectPursuitElapsedTime < FMath::Max(DirectPursuitTeleportDelay, 0.5f))
+	{
+		return false;
+	}
+	if (!TeleportToClosestNavigation())
+	{
+		DirectPursuitElapsedTime = FMath::Max(DirectPursuitTeleportDelay - 1.0f, 0.0f);
+		return false;
+	}
+
+	DirectPursuitElapsedTime = 0.0f;
+	StuckElapsedTime = 0.0f;
+	StuckReferenceLocation = GetActorLocation();
+	NavigationPoints.Reset();
+	CurrentPathPointIndex = INDEX_NONE;
+	bHasValidNavigationPath = false;
+	bDirectlyFollowingOffNavTarget = false;
+	PathRecalculationTimeRemaining = 0.0f;
+	StraightAccelerationAlpha = 0.0f;
+	SmoothedDriveDirection = FVector::ZeroVector;
+	RebuildNavigationPath();
+	return true;
 }
 
 bool ASS_Enemy::UpdateStuckTeleport(float DeltaTime)
@@ -374,6 +414,59 @@ bool ASS_Enemy::TeleportToNearbyNavigation()
 	}
 
 	return false;
+}
+
+bool ASS_Enemy::TeleportToClosestNavigation()
+{
+	UWorld* World = GetWorld();
+	UNavigationSystemV1* NavSystem = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+	UCharacterMovementComponent* Movement = GetCharacterMovement();
+	UCapsuleComponent* Capsule = GetCapsuleComponent();
+	if (!World || !NavSystem || !Movement || !Capsule)
+	{
+		return false;
+	}
+
+	const ANavigationData* NavData = NavSystem->GetNavDataForProps(Movement->NavAgentProps);
+	if (!NavData)
+	{
+		NavData = NavSystem->GetDefaultNavDataInstance(FNavigationSystem::DontCreate);
+	}
+	if (!NavData)
+	{
+		return false;
+	}
+
+	const float CapsuleHalfHeight = Capsule->GetScaledCapsuleHalfHeight();
+	const FVector FeetLocation = GetActorLocation() - FVector::UpVector * CapsuleHalfHeight;
+	const float SearchRadius = FMath::Max(StuckTeleportSearchRadius, 500.0f);
+	FNavLocation ClosestPoint;
+	if (!NavSystem->ProjectPointToNavigation(
+		FeetLocation, ClosestPoint,
+		FVector(SearchRadius, SearchRadius, FMath::Max(SearchRadius * 0.5f, 1000.0f)), NavData))
+	{
+		return false;
+	}
+
+	const FVector Destination = ClosestPoint.Location +
+		FVector::UpVector * (CapsuleHalfHeight + 5.0f);
+	const FRotator UprightRotation(0.0f, GetActorRotation().Yaw, 0.0f);
+	if (!TeleportTo(Destination, UprightRotation, false, false))
+	{
+		return false;
+	}
+
+	if (Capsule->IsSimulatingPhysics())
+	{
+		Capsule->SetPhysicsLinearVelocity(FVector::ZeroVector);
+		Capsule->SetPhysicsAngularVelocityInRadians(FVector::ZeroVector);
+		Capsule->WakeAllRigidBodies();
+	}
+	else
+	{
+		Movement->StopMovementImmediately();
+	}
+	return true;
 }
 
 void ASS_Enemy::UpdateNavigationRecovery()
@@ -620,6 +713,7 @@ void ASS_Enemy::SetFollowTarget(AActor* NewTarget)
 {
 	bDirectlyFollowingOffNavTarget = false;
 	bDirectChargeWithinRange = false;
+	DirectPursuitElapsedTime = 0.0f;
 	FollowTarget = IsValid(NewTarget) ? NewTarget : UGameplayStatics::GetPlayerPawn(this, 0);
 	PathRecalculationTimeRemaining = 0.0f;
 	NavigationPoints.Reset();

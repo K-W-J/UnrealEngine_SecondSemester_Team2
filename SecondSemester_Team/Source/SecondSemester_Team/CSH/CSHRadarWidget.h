@@ -4,6 +4,7 @@
 #include "CSHRadarWidget.generated.h"
 class UTexture2D;
 class UMaterialInstanceDynamic;
+class UMaterialInterface;
 class UTextureRenderTarget2D;
 class FDoubleProperty;
 UCLASS(Blueprintable)
@@ -26,6 +27,8 @@ protected:
     virtual void NativeDestruct() override;
 private:
     UPROPERTY(Transient) TObjectPtr<AActor> RadarActor;
+    UPROPERTY() TSubclassOf<AActor> RadarActorClass;
+    UPROPERTY() TObjectPtr<UMaterialInterface> RadarBaseMaterial;
     UPROPERTY(Transient) TObjectPtr<UMaterialInstanceDynamic> RadarMaterial;
     UPROPERTY(Transient) TObjectPtr<UTextureRenderTarget2D> RadarTarget;
     FDoubleProperty* RadarRangeProperty = nullptr;

@@ -109,16 +109,18 @@ void ASecondSemester_TeamPlayerController::BeginPlay()
 
 		const TSoftClassPtr<UCSHMainUIWidget> MainUIClass(
 			FSoftObjectPath(TEXT("/Game/CSH/Buleprint/UI/WBP_CSH_MainUI.WBP_CSH_MainUI_C")));
-		if (UClass* LoadedMainUIClass = MainUIClass.LoadSynchronous())
+		UClass* LoadedMainUIClass = MainUIClass.LoadSynchronous();
+		if (!LoadedMainUIClass)
 		{
-			MainUIWidget = CreateWidget<UCSHMainUIWidget>(this, LoadedMainUIClass);
-			if (MainUIWidget)
-			{
-				MainUIWidget->SetPointCount(WeaponBoxPointCount);
-				MainUIWidget->AddToPlayerScreen(9);
-				MainUIWidget->SetVisibility(bGameplayHUDVisible
-					? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
-			}
+			LoadedMainUIClass = UCSHMainUIWidget::StaticClass();
+		}
+		MainUIWidget = CreateWidget<UCSHMainUIWidget>(this, LoadedMainUIClass);
+		if (MainUIWidget)
+		{
+			MainUIWidget->SetPointCount(WeaponBoxPointCount);
+			MainUIWidget->AddToPlayerScreen(9);
+			MainUIWidget->SetVisibility(bGameplayHUDVisible
+				? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
 		}
 	}
 

@@ -34,18 +34,19 @@ public:
         SLeafWidget::Tick(Geometry, Time, Delta);
         if (!Owner.IsValid() || !Owner->GetWorld()) return;
         Owner->UpdateRadarSystem();
-        Screen.SetResourceObject(Owner->GetRadarMaterial());
+        Screen.SetResourceObject(Owner->GetRadarMaterial() ? static_cast<UObject*>(Owner->GetRadarMaterial()) : Owner->ScreenTexture.Get());
         Refresh -= Delta;
         if (Refresh <= 0.f)
         {
             Refresh = .25f;
             Boxes.Reset();
+            Enemies.Reset();
             for (TActorIterator<ACSHWeaponBox> It(Owner->GetWorld()); It; ++It)
                 if (It->IsAvailableForPickup()) Boxes.Add(*It);
             for (TActorIterator<ASS_Enemy> It(Owner->GetWorld()); It; ++It)
             {
-                if (!It->bIsDead && !It->ActorHasTag(TEXT("CSH_Towed"))) It->Tags.AddUnique(TEXT("CSHRadarEnemy"));
-                else It->Tags.Remove(TEXT("CSHRadarEnemy"));
+                It->Tags.Remove(TEXT("CSHRadarEnemy"));
+                if (!It->bIsDead && !It->ActorHasTag(TEXT("CSH_Towed"))) Enemies.Add(*It);
             }
         }
         Invalidate(EInvalidateWidgetReason::Paint);
@@ -118,6 +119,21 @@ public:
                 const TArray<FVector2D> Diamond={P+FVector2D(0,-5),P+FVector2D(5,0),P+FVector2D(0,5),P+FVector2D(-5,0),P+FVector2D(0,-5)};
                 FSlateDrawElement::MakeLines(Out,Layer+3,G.ToPaintGeometry(),Diamond,ESlateDrawEffect::None,FLinearColor(.1f,.8f,1.f,1.f),true,2.f);
             }
+            for (const auto& WeakEnemy : Enemies)
+            {
+                const ASS_Enemy* Enemy=WeakEnemy.Get();
+                if (!Enemy || Enemy->bIsDead || Enemy->ActorHasTag(TEXT("CSH_Towed"))) continue;
+                const FVector Delta=Enemy->GetActorLocation()-Player->GetActorLocation();
+                if (Delta.SizeSquared2D()>Range*Range) continue;
+                const FVector2D P=Center+FVector2D(
+                    FVector::DotProduct(Delta,Right),
+                    -FVector::DotProduct(Delta,Forward))*(Radius-5.f)/Range;
+                const TArray<FVector2D> Diamond={
+                    P+FVector2D(0,-6),P+FVector2D(6,0),P+FVector2D(0,6),
+                    P+FVector2D(-6,0),P+FVector2D(0,-6)};
+                FSlateDrawElement::MakeLines(Out,Layer+3,G.ToPaintGeometry(),Diamond,
+                    ESlateDrawEffect::None,FLinearColor(1.f,.08f,.03f,1.f),true,2.f);
+            }
             TSet<FIntPoint> Occupied;
             const FVector Origin=Walls.IsEmpty() ? FVector::ZeroVector : Walls[0];
             for (const FVector& Wall : Walls)
@@ -184,6 +200,7 @@ private:
     FSlateBrush Screen;
     float Refresh=0;
     TArray<TWeakObjectPtr<ACSHWeaponBox>> Boxes;
+    TArray<TWeakObjectPtr<ASS_Enemy>> Enemies;
     TArray<FVector> Walls, PendingWalls;
     FVector ScanOrigin=FVector::ZeroVector;
     float Cell=200.f, DisplayCell=200.f;
@@ -194,6 +211,10 @@ UCSHRadarWidget::UCSHRadarWidget(const FObjectInitializer& Initializer) : Super(
 {
     static ConstructorHelpers::FObjectFinder<UTexture2D> Texture(TEXT("/Game/RadarSystem/Textures/T_Screen.T_Screen"));
     if (Texture.Succeeded()) ScreenTexture=Texture.Object;
+    static ConstructorHelpers::FClassFinder<AActor> RadarBlueprint(TEXT("/Game/RadarSystem/Blueprints/BP_InvisibleRadar"));
+    if (RadarBlueprint.Succeeded()) RadarActorClass=RadarBlueprint.Class;
+    static ConstructorHelpers::FObjectFinder<UMaterialInterface> RadarMaterialAsset(TEXT("/Game/CSH/Materials/M_CSH_RadarSystemUI.M_CSH_RadarSystemUI"));
+    if (RadarMaterialAsset.Succeeded()) RadarBaseMaterial=RadarMaterialAsset.Object;
 }
 TSharedRef<SWidget> UCSHRadarWidget::RebuildWidget() { return SNew(SCSHRadar).Owner(this); }
 
@@ -203,8 +224,8 @@ void UCSHRadarWidget::UpdateRadarSystem()
     if (!Player || !GetWorld() || IsDesignTime()) return;
     if (!IsValid(RadarActor))
     {
-        UClass* RadarClass=LoadClass<AActor>(nullptr,TEXT("/Game/RadarSystem/Blueprints/BP_InvisibleRadar.BP_InvisibleRadar_C"));
-        UMaterialInterface* Material=LoadObject<UMaterialInterface>(nullptr,TEXT("/Game/CSH/Materials/M_CSH_RadarSystemUI.M_CSH_RadarSystemUI"));
+        UClass* RadarClass=RadarActorClass.Get();
+        UMaterialInterface* Material=RadarBaseMaterial;
         if (!RadarClass || !Material) return;
         RadarTarget=NewObject<UTextureRenderTarget2D>(this);
         RadarTarget->ClearColor=FLinearColor::Black;
@@ -243,10 +264,10 @@ void UCSHRadarWidget::UpdateRadarSystem()
         ScreenActorProperty->SetObjectPropertyValue_InContainer(ScreenArray.GetRawPtr(0),RadarActor);
         AppliedDetectionRange=FMath::Max(100.f,DetectionRange);
         RadarRangeProperty->SetPropertyValue_InContainer(RadarActor,AppliedDetectionRange);
-        Tag->SetPropertyValue_InContainer(RadarActor,TEXT("CSHRadarEnemy"));
+        Tag->SetPropertyValue_InContainer(RadarActor,TEXT("CSHRadarNoDots"));
         Target->SetObjectPropertyValue_InContainer(RadarActor,RadarTarget);
         if (auto* DotRadius=FindFProperty<FDoubleProperty>(RadarClass,TEXT("Dot Radius")))
-            DotRadius->SetPropertyValue_InContainer(RadarActor,8.0); // Slightly smaller than the previous 9.0.
+            DotRadius->SetPropertyValue_InContainer(RadarActor,8.0);
         if (auto* Volume=FindFProperty<FFloatProperty>(RadarClass,TEXT("Volume Multiplier"))) Volume->SetPropertyValue_InContainer(RadarActor,.15f);
         RadarActor->FinishSpawning(Transform);
     }

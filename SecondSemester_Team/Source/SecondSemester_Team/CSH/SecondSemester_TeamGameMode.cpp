@@ -3,6 +3,8 @@
 #include "SecondSemester_TeamGameMode.h"
 
 #include "Components/AudioComponent.h"
+#include "Engine/Engine.h"
+#include "GameFramework/GameUserSettings.h"
 #include "Kismet/GameplayStatics.h"
 #include "Sound/SoundBase.h"
 #include "UObject/ConstructorHelpers.h"
@@ -20,6 +22,16 @@ ASecondSemester_TeamGameMode::ASecondSemester_TeamGameMode()
 void ASecondSemester_TeamGameMode::BeginPlay()
 {
 	Super::BeginPlay();
+	if (!IsRunningDedicatedServer() && GEngine)
+	{
+		if (UGameUserSettings* Settings = GEngine->GetGameUserSettings())
+		{
+			Settings->SetFullscreenMode(EWindowMode::WindowedFullscreen);
+			Settings->ApplySettings(false);
+			Settings->SaveSettings();
+		}
+	}
+
 	if (!BackgroundMusic || IsRunningDedicatedServer())
 	{
 		return;

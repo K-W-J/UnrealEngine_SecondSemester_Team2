@@ -252,6 +252,13 @@ public:
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "SS Enemy Movement|Stuck Recovery")
 	float StuckElapsedTime = 0.0f;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "SS Enemy Movement|Direct Pursuit Recovery",
+		meta = (ClampMin = "0.5", Units = "s"))
+	float DirectPursuitTeleportDelay = 20.0f;
+
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "SS Enemy Movement|Direct Pursuit Recovery")
+	float DirectPursuitElapsedTime = 0.0f;
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
@@ -269,7 +276,9 @@ private:
 	void UpdateNavigationRecovery();
 	void ApplyNavigationRecoveryForce();
 	bool UpdateStuckTeleport(float DeltaTime);
+	bool UpdateDirectPursuitTeleport(float DeltaTime);
 	bool TeleportToNearbyNavigation();
+	bool TeleportToClosestNavigation();
 	float NavigationRecoveryCheckTime = 0.0f;
 	FVector StuckReferenceLocation = FVector::ZeroVector;
 	UFUNCTION()

@@ -71,21 +71,23 @@ TSharedRef<SWidget> UCSHMainUIWidget::RebuildWidget()
     const TSoftClassPtr<UUserWidget> WeaponUIClass(
         FSoftObjectPath(TEXT("/Game/CSH/Buleprint/UI/WBP_CSH_WeaponUI.WBP_CSH_WeaponUI_C")));
 
-    if (UClass* LoadedClass = WeaponUIClass.LoadSynchronous())
+    UClass* LoadedClass = WeaponUIClass.LoadSynchronous();
+    if (!LoadedClass)
     {
-        WeaponUIInstance = CreateWidget<UUserWidget>(GetOwningPlayer(), LoadedClass);
-        if (WeaponUIInstance)
-        {
-            WeaponUIInstance->SetVisibility(ESlateVisibility::Collapsed);
+        LoadedClass = UCSHWeaponHUDWidget::StaticClass();
+    }
+    WeaponUIInstance = CreateWidget<UUserWidget>(GetOwningPlayer(), LoadedClass);
+    if (WeaponUIInstance)
+    {
+        WeaponUIInstance->SetVisibility(ESlateVisibility::Collapsed);
 
-            RootOverlay->AddSlot()
-                .HAlign(HAlign_Right)
-                .VAlign(VAlign_Bottom)
-                .Padding(FMargin(0.0f, 0.0f, 34.0f, 34.0f))
-                [
-                    WeaponUIInstance->TakeWidget()
-                ];
-        }
+        RootOverlay->AddSlot()
+            .HAlign(HAlign_Right)
+            .VAlign(VAlign_Bottom)
+            .Padding(FMargin(0.0f, 0.0f, 34.0f, 34.0f))
+            [
+                WeaponUIInstance->TakeWidget()
+            ];
     }
 
     const TSoftClassPtr<UUserWidget> StatusUIClass(
